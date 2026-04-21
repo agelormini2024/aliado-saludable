@@ -1,0 +1,406 @@
+# CLAUDE.md — Aliado Saludable
+
+Este archivo es la fuente de la verdad del proyecto.
+Se actualiza al finalizar cada fase.
+
+---
+
+## Contexto del Proyecto
+
+**Aliado Saludable** es una plataforma web SaaS orientada a personas que enfrentan
+dificultades para bajar de peso. El nombre refleja la filosofía del producto:
+no es un juez ni un tracker frío — es un compañero en el proceso.
+
+**Origen**: propuesta proactiva para una búsqueda publicada en Workana.
+El diferenciador principal frente a otros candidatos es el **Chat IA con RAG**
+alimentado con el historial real del usuario (peso, medidas, comidas, actividad).
+
+### Roles de usuario
+
+| Rol | Descripción |
+|---|---|
+| `USUARIO` | Persona que quiere bajar de peso. Registra su progreso, usa el chat IA, lee artículos. |
+| `COACH` | Nutricionista o entrenador que monitorea el progreso de sus pacientes desde un panel propio. |
+| `ADMIN` | Administrador de la plataforma. Gestiona usuarios, coaches y contenido. |
+
+El modelo multi-tenant con rol de Coach es el diferenciador B2B:
+hace la plataforma vendible a profesionales de salud, no solo a usuarios finales.
+
+### Modelo de negocio (a definir con el cliente)
+
+La plataforma está pensada para soportar **Freemium**:
+- Plan gratuito: seguimiento básico de peso + artículos
+- Plan premium: chat IA + seguimiento completo + acceso a coach
+- Plan coach: panel de gestión de pacientes
+
+Esta decisión no bloquea el MVP — se implementa en fases posteriores.
+
+---
+
+## Stack Tecnológico
+
+Mismo stack que EUCAR v2 para mantener consistencia y velocidad de desarrollo.
+
+| Capa | Tecnología |
+|---|---|
+| Backend | NestJS (TypeScript) |
+| Frontend | Next.js (TypeScript, App Router) |
+| Base de datos | PostgreSQL + Prisma ORM |
+| Autenticación | NestJS Passport + JWT (access + refresh tokens) |
+| Estado del cliente | Tanstack Query (server state) + Zustand (UI state) |
+| Estilos | Tailwind CSS + Material-UI |
+| Formularios | React Hook Form + Zod |
+| IA / Chat | OpenAI gpt-4o-mini + text-embedding-3-small + pgvector (RAG) |
+| Monorepo | Turborepo |
+| CI | GitHub Actions |
+| Infra local dev | Homebrew (PostgreSQL, sin Redis — no se usa) |
+| Deploy demo | Vercel (frontend) + Render (backend) + Supabase (DB) |
+
+---
+
+## Decisiones Técnicas — Ya Tomadas (no reabrir)
+
+**D1: Monorepo con Turborepo**
+Mismo patrón que EUCAR v2. Frontend y backend en el mismo repo.
+
+**D2: API REST en NestJS, sin Server Actions**
+Next.js es SPA pura que consume la API. Reutilizable desde futuros clientes móviles.
+
+**D3: OpenAI siempre (dev y prod)**
+`LLM_PROVIDER=openai` es el único valor válido. No hay modo Ollama.
+
+**D4: pgvector en PostgreSQL existente**
+No se agrega una vector DB separada. Misma decisión que EUCAR v2.
+
+**D5: IDs como String/cuid**
+Consistente con EUCAR v2. Evita colisiones y facilita migraciones.
+
+**D6: Sin Redis**
+No se usa caché distribuida en esta versión. Se eliminó del stack en EUCAR v2 y aplica igual acá.
+
+**D7: Rol COACH desde el inicio**
+El panel de coach no es una fase posterior — el modelo de datos lo soporta desde la migración inicial.
+Construir la UI del coach puede ser posterior, pero el schema debe contemplarlo.
+
+**D8: tsconfig extends usa rutas relativas**
+Igual que EUCAR v2. Los editores no resuelven nombres de paquete de workspaces.
+
+---
+
+## Arquitectura del Backend (NestJS)
+
+```
+backend/
+├── src/
+│   ├── app.module.ts
+│   ├── config/                  # ConfigModule, validación de env vars
+│   ├── database/                # PrismaModule (singleton)
+│   ├── auth/
+│   │   ├── strategies/          # local.strategy.ts, jwt.strategy.ts
+│   │   ├── guards/              # jwt-auth.guard.ts, roles.guard.ts
+│   │   └── decorators/          # @Roles(), @CurrentUser()
+│   ├── usuarios/                # CRUD de usuarios + gestión de perfil
+│   ├── coaches/                 # Panel coach: lista de pacientes, progreso
+│   ├── progreso/
+│   │   ├── peso.service.ts      # Registro de peso con fecha
+│   │   ├── medidas.service.ts   # Cintura, cadera, etc.
+│   │   └── actividad.service.ts # Registro de actividad física
+│   ├── alimentacion/
+│   │   ├── comidas.service.ts   # Registro de comidas del día
+│   │   └── alimentos.service.ts # Catálogo básico de alimentos con calorías
+│   ├── contenido/
+│   │   ├── articulos.service.ts # Artículos/guías (CRUD admin)
+│   │   └── categorias.service.ts
+│   ├── ai/
+│   │   ├── chat.service.ts      # Orquesta RAG → prompt → stream
+│   │   ├── rag.service.ts       # Embeddings + búsqueda vectorial
+│   │   └── context-builder.service.ts
+│   └── common/
+│       ├── filters/
+│       ├── interceptors/
+│       ├── pagination/
+│       └── decorators/
+```
+
+### Convenciones (igual que EUCAR v2)
+- Cada módulo: `controller` → `service` → `prisma` directo (sin capa repository)
+- Response wrapper: `{ data: T, meta?: PaginationMeta }`
+- Global exception filter estandariza todos los errores
+- Guards en orden: `JwtAuthGuard` → `RolesGuard`
+- Swagger en desarrollo (`/api/docs`)
+
+---
+
+## Arquitectura del Frontend (Next.js)
+
+```
+frontend/
+├── app/
+│   ├── (auth)/
+│   │   ├── login/
+│   │   └── register/
+│   ├── (dashboard)/
+│   │   ├── layout.tsx           # sidebar + session guard
+│   │   ├── page.tsx             # Dashboard: gráficos de progreso + resumen
+│   │   ├── progreso/            # Registro de peso, medidas, actividad
+│   │   ├── alimentacion/        # Registro de comidas del día
+│   │   ├── chat/                # Chat IA
+│   │   ├── contenido/           # Artículos y guías
+│   │   └── perfil/              # Datos del usuario + metas
+│   └── (coach)/                 # Panel exclusivo para coaches
+│       ├── layout.tsx
+│       ├── pacientes/           # Lista de pacientes asignados
+│       └── pacientes/[id]/      # Progreso detallado de un paciente
+├── components/
+│   ├── ui/                      # Primitivos reutilizables
+│   ├── dashboard/               # Gráficos, resumen semanal
+│   ├── progreso/                # Formularios y charts de peso/medidas
+│   ├── alimentacion/            # Registro de comidas
+│   └── chat/                    # ChatInterface, MessageBubble
+├── hooks/                       # Tanstack Query hooks por entidad
+│   ├── useProgreso.ts
+│   ├── useAlimentacion.ts
+│   ├── useContenido.ts
+│   └── useChat.ts
+└── stores/                      # Zustand — SOLO UI state
+    └── ui.store.ts
+```
+
+---
+
+## Schema Prisma — Diseño inicial
+
+```prisma
+model Usuario {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  nombre        String
+  apellido      String
+  passwordHash  String
+  rol           RolUsuario @default(USUARIO)
+  coachId       String?   // si tiene coach asignado
+  coach         Coach?    @relation(fields: [coachId], references: [id])
+  altura        Float?    // en cm
+  fechaNacimiento DateTime?
+  meta          Float?    // peso objetivo en kg
+  registrosPeso RegistroPeso[]
+  registrosMedidas RegistroMedidas[]
+  registrosActividad RegistroActividad[]
+  registrosComida RegistroComida[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Coach {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  nombre        String
+  apellido      String
+  passwordHash  String
+  especialidad  String?
+  pacientes     Usuario[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime  @default(now())
+}
+
+enum RolUsuario {
+  USUARIO
+  COACH
+  ADMIN
+}
+
+model RegistroPeso {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  peso      Float    // en kg
+  fecha     DateTime @default(now())
+  nota      String?
+}
+
+model RegistroMedidas {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  cintura   Float?   // en cm
+  cadera    Float?
+  pecho     Float?
+  brazo     Float?
+  muslo     Float?
+  fecha     DateTime @default(now())
+}
+
+model RegistroActividad {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo        String   // "CAMINATA" | "GYM" | "NATACION" | "CICLISMO" | "OTRO"
+  duracion    Int      // en minutos
+  calorias    Int?     // estimado
+  fecha       DateTime @default(now())
+  nota        String?
+}
+
+model RegistroComida {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  momento   String   // "DESAYUNO" | "ALMUERZO" | "MERIENDA" | "CENA" | "SNACK"
+  descripcion String // texto libre — sin base de datos nutricional en MVP
+  calorias  Int?     // opcional, el usuario puede estimarlo
+  fecha     DateTime @default(now())
+}
+
+model Articulo {
+  id          String   @id @default(cuid())
+  titulo      String
+  contenido   String   // texto largo
+  categoria   String   // "NUTRICION" | "EJERCICIO" | "BIENESTAR"
+  publicado   Boolean  @default(false)
+  autorId     String?  // admin que lo escribió
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EmbeddingDocument {
+  id           String   @id @default(cuid())
+  tipo         String   // "PESO" | "MEDIDAS" | "ACTIVIDAD" | "COMIDA" | "ARTICULO"
+  referenciaId String
+  usuarioId    String?  // null para artículos (son globales)
+  contenido    String   // texto plano para búsqueda
+  embedding    Unsupported("vector(1536)")?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  usuarioId String?
+  coachId   String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+```
+
+---
+
+## RAG — Fuentes de contenido (decisión pendiente)
+
+El Chat IA debe poder responder tanto sobre el historial personal del usuario
+como sobre contenido informativo general (nutrición, ejercicio, bienestar).
+
+Hay dos enfoques para alimentar el RAG con contenido informativo:
+
+**Opción A — Carga de documentos (MVP)**: Coach o Admin sube PDFs/artículos al sistema.
+El sistema los fragmenta y genera embeddings. Control total, sin dependencias externas.
+
+**Opción B — Web scraping de URLs predefinidas (fase posterior)**: un cron job visita
+URLs confiables predefinidas por el Admin, extrae el texto y actualiza los embeddings.
+Más automatizado pero más frágil (cambios en los sitios rompen el scraping).
+
+**Decisión**: arrancar con Opción A. El schema ya lo soporta con `tipo = "ARTICULO"`.
+Cuando se agregue scraping, simplemente se agrega `tipo = "DOCUMENTO_WEB"` sin tocar
+el resto del sistema. El campo `usuarioId = null` indica que el documento es global
+(no pertenece a un usuario particular).
+
+---
+
+## RAG — Qué se indexa y para qué
+
+| Tipo | Contenido indexado | Para qué sirve |
+|---|---|---|
+| `PESO` | "El día 15/04 pesé 87.3kg, bajé 0.4kg desde el registro anterior" | "¿Cuánto bajé este mes?" |
+| `MEDIDAS` | "Cintura: 92cm, Cadera: 103cm — registro del 10/04" | "¿Cómo cambió mi cintura?" |
+| `ACTIVIDAD` | "Caminata de 45 minutos el 12/04, estimé 280 calorías" | "¿Cuántos días hice ejercicio?" |
+| `COMIDA` | "Almuerzo del 14/04: ensalada con pollo, aprox 450 cal" | "¿Qué comí esta semana?" |
+| `ARTICULO` | Texto completo del artículo (global, no por usuario) | Preguntas sobre nutrición/ejercicio |
+
+El Chat IA combina:
+- **Estadísticas en tiempo real**: peso actual, meta, días registrados, tendencia
+- **RAG personal**: top-10 registros relevantes del usuario
+- **RAG global**: artículos relacionados con la pregunta
+
+---
+
+## Variables de Entorno
+
+```env
+# Base de datos
+DATABASE_URL="postgresql://alejandrogelormini@localhost:5432/aliado_saludable?schema=public"
+
+# Auth
+JWT_SECRET=...
+JWT_REFRESH_SECRET=...
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Frontend
+NEXT_PUBLIC_API_URL=http://localhost:3001
+
+# IA
+OPENAI_API_KEY=...
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_CHAT_MODEL=gpt-4o-mini
+```
+
+---
+
+## Roadmap de Implementación
+
+### Fase 0 — Setup ✅
+- [x] Inicializar Turborepo con `apps/backend` (NestJS) y `apps/frontend` (Next.js)
+- [x] Configurar packages/tsconfig y packages/types
+- [x] ESLint v9, Prettier, tsconfig compartido con rutas relativas
+- [x] GitHub Actions: lint + test en paralelo
+- [x] Base de datos `aliado_saludable` creada en PostgreSQL local
+- [x] `turbo lint` y `turbo build` pasan sin errores
+
+### Fase 1 — Backend Core ⬜
+- [ ] Schema Prisma + migraciones iniciales
+- [ ] Auth completo: JWT + refresh tokens + RBAC (USUARIO / COACH / ADMIN)
+- [ ] Módulos: usuarios, progreso (peso + medidas + actividad), alimentación
+- [ ] Swagger docs
+- [ ] Tests unitarios de auth
+
+### Fase 2 — Dashboard + Progreso ⬜
+- [ ] **Home/Landing page atractiva** (página pública en `/`, antes del login — presenta la plataforma, sus beneficios y el CTA de registro)
+- [ ] Frontend base: layout, sidebar, auth guard
+- [ ] Dashboard con gráfico de peso (últimos 30 días) y resumen semanal
+- [ ] Registro de peso y medidas
+- [ ] Registro de actividad física
+- [ ] Registro de comidas (descripción libre + calorías opcionales)
+
+### Fase 3 — Contenido + Chat IA ⬜
+- [ ] Backend: módulo de artículos (CRUD admin + listado público)
+- [ ] pgvector: migración + EmbeddingDocument
+- [ ] RAG: indexación de registros del usuario + artículos
+- [ ] Chat IA con contexto personal + artículos relacionados
+- [ ] Frontend: sección de artículos + interfaz de chat
+
+### Fase 4 — Panel Coach ⬜
+- [ ] Backend: módulo coaches, asignación de pacientes
+- [ ] Frontend: panel coach con lista de pacientes y gráficos de progreso
+- [ ] Notificaciones básicas (nuevo registro del paciente)
+
+### Fase 5 — Hardening + Deploy DEMO ⬜
+- [ ] Rate limiting + logging estructurado
+- [ ] Tests E2E básicos
+- [ ] Deploy: Supabase + Render + Vercel
+- [ ] Demo lista para presentar en Workana
+
+---
+
+## Reglas para esta Conversación
+
+- Idioma: español siempre
+- No escribir código hasta que se confirme el inicio de cada fase
+- Al iniciar cada fase, confirmar el plan antes de implementar
+- Seguir las convenciones de NestJS estándar
+- Cada feature debe tener tests antes de ser considerada completa
+- No reabrir decisiones técnicas ya tomadas
+- Explicaciones didácticas cuando aparecen conceptos o patrones nuevos
+- **Usar JSDoc y comentarios didácticos en todo el código**: cada clase, método, función,
+  interfaz y tipo debe tener su JSDoc explicando qué hace, por qué existe y cómo usarlo.
+  El objetivo es que cualquier desarrollador pueda entender el código sin contexto previo.
