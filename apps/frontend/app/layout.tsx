@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, DM_Sans } from "next/font/google";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
 /**
@@ -57,7 +58,7 @@ export default function RootLayout({
       className={`${fraunces.variable} ${dmSans.variable}`}
     >
       <body className="font-sans bg-cream text-ink antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

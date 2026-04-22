@@ -124,7 +124,7 @@ export default function Home() {
               Ingresar
             </Link>
             <Link
-              href="/registro"
+              href="/register"
               className="text-sm bg-forest text-white px-5 py-2.5 rounded-full hover:bg-forest-mid transition-colors duration-200 font-medium"
             >
               Registrarse
@@ -141,11 +141,11 @@ export default function Home() {
         {/* Blobs de fondo — gradientes difusos que dan profundidad y calidez */}
         <div
           aria-hidden
-          className="absolute top-[-15%] right-[-10%] w-[700px] h-[700px] rounded-full bg-forest-pale blur-3xl opacity-80 pointer-events-none"
+          className="absolute top-[-15%] right-[-10%] w-175 h-175 rounded-full bg-forest-pale blur-3xl opacity-80 pointer-events-none"
         />
         <div
           aria-hidden
-          className="absolute bottom-[-12%] left-[-8%] w-[500px] h-[500px] rounded-full bg-amber-pale blur-3xl opacity-60 pointer-events-none"
+          className="absolute bottom-[-12%] left-[-8%] w-125 h-125 rounded-full bg-amber-pale blur-3xl opacity-60 pointer-events-none"
         />
 
         <div className="flex-1 flex items-center">
@@ -188,7 +188,7 @@ export default function Home() {
                 style={{ animationDelay: "350ms" }}
               >
                 <Link
-                  href="/registro"
+                  href="/register"
                   className="inline-flex items-center justify-center gap-2 bg-forest text-white px-8 py-4 rounded-full text-base font-medium hover:bg-forest-mid hover:gap-3 hover:shadow-lg transition-all duration-200"
                 >
                   Empezar gratis
@@ -207,7 +207,7 @@ export default function Home() {
                 Muestran un mockup de la UI real del producto para que el
                 usuario entienda de un vistazo qué va a encontrar adentro. */}
             <div
-              className="relative h-[480px] hidden lg:block"
+              className="relative h-120 hidden lg:block"
               aria-hidden
             >
               {/* Tarjeta principal — gráfico de progreso semanal */}
@@ -375,7 +375,7 @@ export default function Home() {
                 {i < STEPS.length - 1 && (
                   <div
                     aria-hidden
-                    className="hidden md:block absolute top-10 left-[calc(100%_-_1rem)] w-16 h-px bg-forest opacity-20"
+                    className="hidden md:block absolute top-10 left-[calc(100%-1rem)] w-16 h-px bg-forest opacity-20"
                   />
                 )}
 
@@ -407,7 +407,7 @@ export default function Home() {
             compromisos, sin tarjeta de crédito.
           </p>
           <Link
-            href="/registro"
+            href="/register"
             className="inline-flex items-center gap-2 bg-amber text-white px-10 py-4 rounded-full text-base font-semibold hover:bg-amber-light hover:gap-3 hover:shadow-2xl shadow-lg transition-all duration-200"
           >
             Registrarte gratis
