@@ -1,0 +1,220 @@
+// =============================================================================
+// Schema Prisma — Aliado Saludable
+//
+// Define todos los modelos de la base de datos.
+// Prisma genera el cliente TypeScript a partir de este archivo.
+//
+// Para aplicar cambios:
+//   pnpm --filter @aliado/backend exec prisma migrate dev --name <nombre>
+//
+// Para regenerar el cliente sin migrar:
+//   pnpm --filter @aliado/backend exec prisma generate
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Enum: Roles de usuario
+//
+// USUARIO  → persona que quiere bajar de peso (usuario final)
+// COACH    → nutricionista/entrenador que monitorea pacientes
+// ADMIN    → administrador de la plataforma
+// =============================================================================
+enum RolUsuario {
+  USUARIO
+  COACH
+  ADMIN
+}
+
+// =============================================================================
+// Model: Usuario
+//
+// Representa a una persona registrada en la plataforma.
+// Puede tener un Coach asignado (relación opcional).
+// Todos los registros de progreso y alimentación pertenecen a un Usuario.
+// =============================================================================
+model Usuario {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  nombre          String
+  apellido        String
+  passwordHash    String
+  rol             RolUsuario @default(USUARIO)
+
+  // Relación opcional con un Coach asignado
+  coachId         String?
+  coach           Coach?    @relation(fields: [coachId], references: [id])
+
+  // Datos de perfil opcionales (se completan después del registro)
+  altura          Float?    // en centímetros
+  fechaNacimiento DateTime?
+  meta            Float?    // peso objetivo en kilogramos
+
+  // Registros de progreso y alimentación
+  registrosPeso      RegistroPeso[]
+  registrosMedidas   RegistroMedidas[]
+  registrosActividad RegistroActividad[]
+  registrosComida    RegistroComida[]
+
+  // Refresh tokens activos del usuario
+  refreshTokens RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// Model: Coach
+//
+// Representa a un profesional de salud (nutricionista, entrenador).
+// Puede tener múltiples pacientes (Usuarios) asignados.
+// Tiene su propio flujo de autenticación separado del Usuario.
+// =============================================================================
+model Coach {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  nombre       String
+  apellido     String
+  passwordHash String
+  especialidad String?
+
+  // Pacientes asignados a este coach
+  pacientes Usuario[]
+
+  // Refresh tokens activos del coach
+  refreshTokens RefreshToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// Model: RegistroPeso
+//
+// Un registro de peso del usuario en un momento determinado.
+// La tendencia de estos registros a lo largo del tiempo es el indicador
+// principal de progreso que se muestra en el dashboard.
+// =============================================================================
+model RegistroPeso {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  peso      Float    // en kilogramos
+  fecha     DateTime @default(now())
+  nota      String?  // comentario libre del usuario
+
+  @@index([usuarioId, fecha])
+}
+
+// =============================================================================
+// Model: RegistroMedidas
+//
+// Medidas corporales del usuario en un momento determinado.
+// Todos los campos son opcionales: el usuario registra solo lo que mide.
+// =============================================================================
+model RegistroMedidas {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  cintura   Float?   // en centímetros
+  cadera    Float?
+  pecho     Float?
+  brazo     Float?
+  muslo     Float?
+  fecha     DateTime @default(now())
+
+  @@index([usuarioId, fecha])
+}
+
+// =============================================================================
+// Model: RegistroActividad
+//
+// Un registro de actividad física del usuario.
+// El tipo es texto libre categorizado: CAMINATA, GYM, NATACION, CICLISMO, OTRO.
+// Las calorías son opcionales y estimadas por el usuario.
+// =============================================================================
+model RegistroActividad {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tipo      String   // "CAMINATA" | "GYM" | "NATACION" | "CICLISMO" | "OTRO"
+  duracion  Int      // en minutos
+  calorias  Int?     // estimado opcional
+  fecha     DateTime @default(now())
+  nota      String?
+
+  @@index([usuarioId, fecha])
+}
+
+// =============================================================================
+// Model: RegistroComida
+//
+// Un registro de ingesta del usuario en un momento del día.
+// La descripción es texto libre para el MVP (sin base de datos nutricional).
+// El campo "momento" indica en qué parte del día ocurrió la comida.
+// =============================================================================
+model RegistroComida {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  momento     String   // "DESAYUNO" | "ALMUERZO" | "MERIENDA" | "CENA" | "SNACK"
+  descripcion String   // texto libre
+  calorias    Int?     // estimado opcional
+  fecha       DateTime @default(now())
+
+  @@index([usuarioId, fecha])
+}
+
+// =============================================================================
+// Model: Articulo
+//
+// Contenido informativo creado por el Admin (nutrición, ejercicio, bienestar).
+// Los artículos publicados son visibles para todos los usuarios.
+// También se indexan como EmbeddingDocument para el RAG del chat IA.
+// =============================================================================
+model Articulo {
+  id        String   @id @default(cuid())
+  titulo    String
+  contenido String   // texto largo en markdown
+  categoria String   // "NUTRICION" | "EJERCICIO" | "BIENESTAR"
+  publicado Boolean  @default(false)
+  autorId   String?  // ID del admin que lo creó (referencia lógica, sin FK)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// NOTA: EmbeddingDocument se agrega en Fase 3 (RAG + Chat IA).
+//
+// Requiere la extensión pgvector instalada en PostgreSQL y una migración
+// separada que primero ejecute: CREATE EXTENSION IF NOT EXISTS vector;
+//
+// Se omite aquí para que la migración inicial pueda ejecutarse sin pgvector.
+// =============================================================================
+
+// =============================================================================
+// Model: RefreshToken
+//
+// Almacena los refresh tokens activos.
+// Puede pertenecer a un Usuario o a un Coach (campos mutuamente excluyentes).
+// Al hacer logout o al rotar el token, se elimina el registro.
+// =============================================================================
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique  // hash del token (nunca el token en claro)
+  usuarioId String?
+  coachId   String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relaciones opcionales para cascada de eliminación
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  coach   Coach?   @relation(fields: [coachId], references: [id], onDelete: Cascade)
+}

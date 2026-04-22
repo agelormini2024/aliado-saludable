@@ -1,1 +1,127 @@
 @import "tailwindcss";
+
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────────
+   Definidos como CSS custom properties en @theme para que Tailwind v4
+   los exponga como utilidades: bg-forest, text-amber, font-heading, etc.
+   ─────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Tipografía
+     --font-fraunces y --font-dm-sans son inyectadas por next/font en <html>
+     y referenciadas acá para crear las utilidades font-heading y font-sans */
+  --font-heading: var(--font-fraunces);
+  --font-sans: var(--font-dm-sans);
+
+  /* Paleta — verde bosque (primario), crema (fondo), ámbar (acento cálido) */
+  --color-cream: #f7f4ee;
+  --color-cream-dark: #ede8dc;
+  --color-forest: #1e5631;
+  --color-forest-mid: #2d7a4f;
+  --color-forest-light: #52b788;
+  --color-forest-pale: #e8f5ee;
+  --color-amber: #c97d4b;
+  --color-amber-light: #e8a37a;
+  --color-amber-pale: #fdf3e6;
+  --color-ink: #1a1a1a;
+  --color-ink-muted: #5c5c5c;
+}
+
+/* ─── KEYFRAMES ─────────────────────────────────────────────────────────────
+   Animaciones reutilizadas en la landing:
+   - float* : movimiento orgánico para las tarjetas del hero
+   - fade-up : entrada desde abajo para el contenido del hero
+   - scroll-reveal : revelado al hacer scroll (CSS scroll-driven animations)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(-1deg);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0.5deg);
+  }
+}
+
+@keyframes float-tiny {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(1.5deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scroll-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(36px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* ─── CLASES UTILITARIAS ─────────────────────────────────────────────────── */
+
+/* Flotado orgánico para las tarjetas decorativas del hero */
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+.animate-float-tiny {
+  animation: float-tiny 7s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
+/* Entrada del hero con fill-mode: both = opacidad 0 durante el delay */
+.animate-fade-up {
+  animation: fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Revelado progresivo al hacer scroll (CSS scroll-driven animations API)
+   Soportado en Chrome 115+ y Firefox 110+; en Safari degrada sin animación */
+.scroll-reveal {
+  animation: scroll-reveal linear both;
+  animation-timeline: view();
+  animation-range: entry 0% entry 35%;
+}
+
+/* Bounce suave para el hint de scroll */
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
+}

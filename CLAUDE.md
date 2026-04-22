@@ -357,12 +357,13 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Base de datos `aliado_saludable` creada en PostgreSQL local
 - [x] `turbo lint` y `turbo build` pasan sin errores
 
-### Fase 1 — Backend Core ⬜
-- [ ] Schema Prisma + migraciones iniciales
-- [ ] Auth completo: JWT + refresh tokens + RBAC (USUARIO / COACH / ADMIN)
-- [ ] Módulos: usuarios, progreso (peso + medidas + actividad), alimentación
-- [ ] Swagger docs
-- [ ] Tests unitarios de auth
+### Fase 1 — Backend Core ✅
+- [x] Schema Prisma + migración inicial (EmbeddingDocument diferido a Fase 3 — pgvector requiere compilación manual en macOS 13)
+- [x] Auth completo: JWT + refresh tokens + RBAC (USUARIO / COACH / ADMIN)
+- [x] Módulos: usuarios, progreso (peso + medidas + actividad), alimentación
+- [x] Swagger docs (decoradores en todos los controllers, accesible en /api/docs)
+- [x] Tests unitarios de auth (9 tests: register, validarCredenciales, refresh, logout)
+- [x] bcryptjs en lugar de bcrypt (evita dependencia de binding nativo no compilable)
 
 ### Fase 2 — Dashboard + Progreso ⬜
 - [ ] **Home/Landing page atractiva** (página pública en `/`, antes del login — presenta la plataforma, sus beneficios y el CTA de registro)
