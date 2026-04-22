@@ -22,6 +22,18 @@ export interface RegistroPeso {
   nota?: string | null;
 }
 
+/** Medidas corporales en cm — todos los campos son opcionales por diseño */
+export interface RegistroMedidas {
+  id: string;
+  usuarioId: string;
+  cintura?: number | null;
+  cadera?: number | null;
+  pecho?: number | null;
+  brazo?: number | null;
+  muslo?: number | null;
+  fecha: string; // ISO 8601
+}
+
 export interface RegistroActividad {
   id: string;
   usuarioId: string;
@@ -56,6 +68,22 @@ export function usePesos(limit = 30) {
     queryFn: async () => {
       const res = await api.get<PaginatedResult<RegistroPeso>>(
         `/progreso/peso?limit=${limit}&page=1`,
+      );
+      return res.data;
+    },
+  });
+}
+
+/**
+ * Devuelve el historial de medidas corporales del usuario autenticado.
+ * Default: 5 registros (para el panel de progreso).
+ */
+export function useMedidas(limit = 5) {
+  return useQuery({
+    queryKey: ["medidas", limit],
+    queryFn: async () => {
+      const res = await api.get<PaginatedResult<RegistroMedidas>>(
+        `/progreso/medidas?limit=${limit}&page=1`,
       );
       return res.data;
     },
