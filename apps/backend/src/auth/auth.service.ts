@@ -10,6 +10,7 @@ import { PrismaService } from "../database/prisma.service";
 import { RegisterDto } from "./dto/register.dto";
 import { Usuario } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { JwtPayload } from "./strategies/jwt.strategy";
 
 /**
@@ -130,11 +131,8 @@ export class AuthService {
    * @throws UnauthorizedException si el token no existe o expiró
    */
   async refresh(refreshToken: string): Promise<AuthTokens> {
-    // Buscar el token hasheado en la BD
-    const tokenHash = await bcrypt.hash(refreshToken, this.BCRYPT_ROUNDS);
-
-    // Buscamos por hash — necesitamos comparar con bcrypt.compare
-    // porque bcrypt genera un salt distinto cada vez
+    // Buscamos todos los tokens activos y comparamos con bcrypt.compare
+    // porque bcrypt genera un salt distinto en cada hash (no se puede comparar por hash directo)
     const registros = await this.prisma.refreshToken.findMany({
       where: {
         usuarioId: { not: null },
@@ -214,6 +212,6 @@ export class AuthService {
    * Usa crypto.randomBytes que es criptográficamente seguro.
    */
   private generarTokenAleatorio(): string {
-    return require("crypto").randomBytes(32).toString("hex");
+    return randomBytes(32).toString("hex");
   }
 }
