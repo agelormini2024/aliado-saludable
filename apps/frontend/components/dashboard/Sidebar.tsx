@@ -33,6 +33,12 @@ const IconProgreso = () => (
   </svg>
 );
 
+const IconActividad = () => (
+  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+  </svg>
+);
+
 const IconAlimentacion = () => (
   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path d="M3 4a1 1 0 011-1h1v4.586l.293-.293a1 1 0 011.414 1.414L6 10.414V16a1 1 0 11-2 0v-5.586l-.707-.707A1 1 0 014 8.586V4a1 1 0 011-1zM9 3a1 1 0 00-1 1v4a3 3 0 003 3v5a1 1 0 102 0v-5a3 3 0 003-3V4a1 1 0 00-1-1 1 1 0 00-1 1v3h-4V4a1 1 0 00-1-1z" />
@@ -68,6 +74,7 @@ const IconLogout = () => (
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", Icon: IconDashboard },
   { label: "Progreso", href: "/progreso", Icon: IconProgreso },
+  { label: "Actividad", href: "/actividad", Icon: IconActividad },
   { label: "Alimentación", href: "/alimentacion", Icon: IconAlimentacion },
   { label: "Chat IA", href: "/chat", Icon: IconChat },
   { label: "Contenido", href: "/contenido", Icon: IconContenido },

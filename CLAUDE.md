@@ -133,37 +133,54 @@ backend/
 
 ## Arquitectura del Frontend (Next.js)
 
+### Decisiones técnicas tomadas en Fase 2
+
+- **Auth guard**: mounted check en `(dashboard)/layout.tsx` — evita hydration flash con Zustand/localStorage
+- **Rutas**: `/dashboard` (no `/`) para no conflictuar con la landing en `app/page.tsx`
+- **Progreso y Actividad separados**: `/progreso` (peso + medidas con tabs) y `/actividad` (actividad física)
+- **Alimentación**: navegador de fechas prev/next; vista del día agrupada por momento
+- **Gráfico de peso**: Recharts con `dynamic({ ssr: false })` — evita errores de DOM en SSR
+- **Responses**: `/progreso/*` y `/actividad` devuelven `PaginatedResult<T>` sin wrapper; `/alimentacion/*` devuelve `{ data: T }`
+- **tsconfig paths**: `"@/*": ["./*"]` (raíz del frontend, no `./src/*`)
+
 ```
 frontend/
 ├── app/
+│   ├── page.tsx                 # Landing pública — Server Component, animaciones CSS
+│   ├── layout.tsx               # RootLayout con Fraunces + DM Sans, Providers
+│   ├── globals.css              # Tailwind v4 @theme tokens + keyframes
 │   ├── (auth)/
-│   │   ├── login/
-│   │   └── register/
+│   │   ├── layout.tsx           # Centrado con blobs decorativos
+│   │   ├── login/page.tsx       # RHF+Zod → POST /auth/login → GET /usuarios/me
+│   │   └── register/page.tsx    # RHF+Zod → POST /auth/register → GET /usuarios/me
 │   ├── (dashboard)/
-│   │   ├── layout.tsx           # sidebar + session guard
-│   │   ├── page.tsx             # Dashboard: gráficos de progreso + resumen
-│   │   ├── progreso/            # Registro de peso, medidas, actividad
-│   │   ├── alimentacion/        # Registro de comidas del día
-│   │   ├── chat/                # Chat IA
-│   │   ├── contenido/           # Artículos y guías
-│   │   └── perfil/              # Datos del usuario + metas
-│   └── (coach)/                 # Panel exclusivo para coaches
+│   │   ├── layout.tsx           # Auth guard (mounted check) + Sidebar + MobileHeader
+│   │   ├── dashboard/page.tsx   # Métricas, gráfico Recharts, resumen semanal
+│   │   ├── progreso/page.tsx    # Tabs Peso/Medidas — formularios + historial timeline
+│   │   ├── actividad/page.tsx   # Selector visual de tipo + historial con badges
+│   │   ├── alimentacion/page.tsx # Selector de momento + DateNavigator + vista del día
+│   │   ├── chat/                # Chat IA (Fase 3)
+│   │   ├── contenido/           # Artículos y guías (Fase 3)
+│   │   └── perfil/              # Datos del usuario + metas (Fase 3+)
+│   └── (coach)/                 # Panel exclusivo para coaches (Fase 4)
 │       ├── layout.tsx
-│       ├── pacientes/           # Lista de pacientes asignados
-│       └── pacientes/[id]/      # Progreso detallado de un paciente
+│       ├── pacientes/
+│       └── pacientes/[id]/
 ├── components/
-│   ├── ui/                      # Primitivos reutilizables
-│   ├── dashboard/               # Gráficos, resumen semanal
-│   ├── progreso/                # Formularios y charts de peso/medidas
-│   ├── alimentacion/            # Registro de comidas
-│   └── chat/                    # ChatInterface, MessageBubble
+│   ├── providers.tsx            # QueryClientProvider + ReactQueryDevtools
+│   ├── dashboard/
+│   │   ├── Sidebar.tsx          # bg-forest, rounded-r-3xl, overlay mobile, amber active bar
+│   │   ├── MobileHeader.tsx     # lg:hidden, hamburger, logo, avatar inicial
+│   │   └── PesoChart.tsx        # Recharts AreaChart — importar con dynamic({ ssr: false })
+│   └── chat/                    # ChatInterface, MessageBubble (Fase 3)
 ├── hooks/                       # Tanstack Query hooks por entidad
-│   ├── useProgreso.ts
-│   ├── useAlimentacion.ts
-│   ├── useContenido.ts
-│   └── useChat.ts
+│   ├── useProgreso.ts           # usePesos, useMedidas, useActividad
+│   ├── useAlimentacion.ts       # useComidasDelDia(fecha?)
+│   ├── useContenido.ts          # (Fase 3)
+│   └── useChat.ts               # (Fase 3)
 └── stores/                      # Zustand — SOLO UI state
-    └── ui.store.ts
+    ├── auth.store.ts            # persist en localStorage ("aliado-auth"), AuthUsuario
+    └── ui.store.ts              # sidebarOpen
 ```
 
 ---
@@ -365,13 +382,13 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Tests unitarios de auth (9 tests: register, validarCredenciales, refresh, logout)
 - [x] bcryptjs en lugar de bcrypt (evita dependencia de binding nativo no compilable)
 
-### Fase 2 — Dashboard + Progreso ⬜
-- [ ] **Home/Landing page atractiva** (página pública en `/`, antes del login — presenta la plataforma, sus beneficios y el CTA de registro)
-- [ ] Frontend base: layout, sidebar, auth guard
-- [ ] Dashboard con gráfico de peso (últimos 30 días) y resumen semanal
-- [ ] Registro de peso y medidas
-- [ ] Registro de actividad física
-- [ ] Registro de comidas (descripción libre + calorías opcionales)
+### Fase 2 — Dashboard + Progreso ✅
+- [x] **Home/Landing page atractiva** — `/` Server Component, Fraunces + DM Sans, paleta crema/bosque/ámbar, animaciones CSS scroll-driven
+- [x] Frontend base: layout con sidebar (bg-forest, rounded-r-3xl), auth guard con mounted check anti-hydration, Zustand stores, Axios + Tanstack Query
+- [x] Dashboard con gráfico de peso (Recharts AreaChart, dynamic SSR-off), tarjetas de métricas y resumen semanal
+- [x] Registro de peso y medidas — `/progreso`, tabs Peso/Medidas, formularios RHF+Zod, historial con timeline
+- [x] Registro de actividad física — `/actividad`, selector visual de tipo (5 botones), historial con badges por tipo
+- [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, navegador de fechas (prev/next), vista del día agrupada por momento
 
 ### Fase 3 — Contenido + Chat IA ⬜
 - [ ] Backend: módulo de artículos (CRUD admin + listado público)
