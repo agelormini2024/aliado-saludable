@@ -15,7 +15,8 @@ export type MomentoComida = (typeof MOMENTOS_COMIDA)[number];
  * CreateComidaDto — datos para registrar una ingesta del día
  *
  * La descripción es texto libre (sin base de datos nutricional en el MVP).
- * Las calorías son opcionales y estimadas por el usuario.
+ * Las calorías son requeridas: permiten calcular el balance calórico diario
+ * que se muestra en el dashboard y se usará como contexto en el chat IA.
  */
 export class CreateComidaDto {
   @ApiProperty({
@@ -33,11 +34,10 @@ export class CreateComidaDto {
   @IsString()
   descripcion!: string;
 
-  @ApiProperty({ example: 450, description: "Calorías estimadas (opcional)", required: false })
-  @IsOptional()
+  @ApiProperty({ example: 450, description: "Calorías estimadas consumidas" })
   @IsNumber()
   @Min(0)
-  calorias?: number;
+  calorias!: number;
 
   @ApiProperty({
     example: "2026-04-21",

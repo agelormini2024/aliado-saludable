@@ -70,7 +70,12 @@ const actividadSchema = z.object({
       const n = Math.round(Number(val));
       return isNaN(n) ? undefined : n;
     },
-    z.number().min(0, "Las calorías no pueden ser negativas").optional(),
+    z
+      .number({
+        required_error: "Ingresá las calorías estimadas",
+        invalid_type_error: "Ingresá un número válido",
+      })
+      .min(0, "Las calorías no pueden ser negativas"),
   ),
   fecha: z.string().min(1, "Seleccioná una fecha"),
   nota: z.string().max(500, "La nota no puede superar 500 caracteres").optional(),
@@ -167,13 +172,14 @@ function FormActividad() {
       await api.post("/progreso/actividad", {
         tipo: data.tipo,
         duracion: data.duracion,
+        calorias: data.calorias,
         fecha: data.fecha,
-        ...(data.calorias !== undefined ? { calorias: data.calorias } : {}),
         ...(data.nota?.trim() ? { nota: data.nota.trim() } : {}),
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["actividad"] });
+      queryClient.invalidateQueries({ queryKey: ["resumen-calorias"] });
       reset({ fecha: getTodayISO(), nota: "" });
     },
   });
@@ -238,7 +244,7 @@ function FormActividad() {
 
         {/* ── Calorías ── */}
         <Field
-          label="Calorías estimadas (opcional)"
+          label="Calorías estimadas"
           unit="cal"
           error={errors.calorias?.message}
         >
@@ -379,11 +385,9 @@ function HistorialActividad() {
                     min
                   </span>
                 </p>
-                {item.calorias != null && (
-                  <p className="font-sans text-sm text-ink-muted">
-                    · {item.calorias} cal
-                  </p>
-                )}
+                <p className="font-sans text-sm text-ink-muted">
+                  · {item.calorias} cal
+                </p>
               </div>
 
               {/* Nota */}

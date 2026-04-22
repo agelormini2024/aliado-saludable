@@ -19,7 +19,7 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAuthStore } from "@/stores/auth.store";
-import { usePesos, useActividad } from "@/hooks/useProgreso";
+import { usePesos, useActividad, useResumenCalorias } from "@/hooks/useProgreso";
 import { useComidasDelDia } from "@/hooks/useAlimentacion";
 import type { ChartDataPoint } from "@/components/dashboard/PesoChart";
 
@@ -160,6 +160,88 @@ function EmptyStatePeso() {
   );
 }
 
+/**
+ * BalanceCard — balance calórico del día en tres columnas: consumidas / quemadas / neto.
+ * El color del balance refleja el estado: verde (déficit = bien), ámbar (superávit), gris (cero).
+ */
+function BalanceCard({
+  consumidas,
+  quemadas,
+  balance,
+}: {
+  consumidas: number;
+  quemadas: number;
+  balance: number;
+}) {
+  const balanceColor =
+    balance > 0
+      ? "text-amber"
+      : balance < 0
+        ? "text-forest"
+        : "text-ink-muted";
+
+  const balanceBadge =
+    balance > 0
+      ? "bg-amber-pale text-amber"
+      : balance < 0
+        ? "bg-forest-pale text-forest"
+        : "bg-cream-dark text-ink-muted";
+
+  return (
+    <div className="rounded-2xl border border-cream-dark bg-white/60 px-6 py-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-heading italic text-lg text-forest">
+          Balance de hoy
+        </h2>
+        <span
+          className={`rounded-full px-3 py-1 font-sans text-xs font-semibold ${balanceBadge}`}
+        >
+          {balance > 0 ? "+" : ""}
+          {balance} cal neto
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 divide-x divide-cream-dark">
+        {/* Consumidas */}
+        <div className="pr-4 text-center">
+          <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+            Consumidas
+          </p>
+          <p className="font-heading italic text-2xl font-semibold leading-none text-amber">
+            {consumidas}
+          </p>
+          <p className="mt-0.5 font-sans text-[10px] text-ink-muted">cal</p>
+        </div>
+
+        {/* Quemadas */}
+        <div className="px-4 text-center">
+          <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+            Quemadas
+          </p>
+          <p className="font-heading italic text-2xl font-semibold leading-none text-forest">
+            {quemadas}
+          </p>
+          <p className="mt-0.5 font-sans text-[10px] text-ink-muted">cal</p>
+        </div>
+
+        {/* Balance neto */}
+        <div className="pl-4 text-center">
+          <p className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-muted">
+            Balance
+          </p>
+          <p
+            className={`font-heading italic text-2xl font-semibold leading-none ${balanceColor}`}
+          >
+            {balance > 0 ? "+" : ""}
+            {balance}
+          </p>
+          <p className="mt-0.5 font-sans text-[10px] text-ink-muted">cal</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Tarjeta del resumen semanal */
 function ResumenCard({
   icon,
@@ -200,6 +282,7 @@ export default function DashboardPage() {
   const { data: pesos, isLoading: loadingPesos } = usePesos(30);
   const { data: actividad, isLoading: loadingActividad } = useActividad(30);
   const { data: comidasHoy, isLoading: loadingComidas } = useComidasDelDia();
+  const { data: balance, isLoading: loadingBalance } = useResumenCalorias();
 
   /* ── Datos derivados del peso ── */
   const ultimoPeso = pesos?.items[0] ?? null;
@@ -381,6 +464,19 @@ export default function DashboardPage() {
               </p>
             )}
           </>
+        )}
+      </section>
+
+      {/* ── Balance calórico del día ── */}
+      <section>
+        {loadingBalance ? (
+          <Skeleton className="h-32" />
+        ) : (
+          <BalanceCard
+            consumidas={balance?.consumidas ?? 0}
+            quemadas={balance?.quemadas ?? 0}
+            balance={balance?.balance ?? 0}
+          />
         )}
       </section>
 

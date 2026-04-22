@@ -7,6 +7,9 @@ export type TipoActividad = (typeof TIPOS_ACTIVIDAD)[number];
 
 /**
  * CreateActividadDto — datos para registrar una sesión de actividad física
+ *
+ * Las calorías son requeridas: permiten calcular el balance calórico diario
+ * que se muestra en el dashboard y se usará como contexto en el chat IA.
  */
 export class CreateActividadDto {
   @ApiProperty({
@@ -25,11 +28,10 @@ export class CreateActividadDto {
   @Min(1)
   duracion!: number;
 
-  @ApiProperty({ example: 280, description: "Calorías estimadas (opcional)", required: false })
-  @IsOptional()
+  @ApiProperty({ example: 280, description: "Calorías estimadas quemadas" })
   @IsNumber()
   @Min(0)
-  calorias?: number;
+  calorias!: number;
 
   @ApiProperty({ example: "2026-04-21", required: false })
   @IsOptional()

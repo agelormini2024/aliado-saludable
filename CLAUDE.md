@@ -85,6 +85,9 @@ Construir la UI del coach puede ser posterior, pero el schema debe contemplarlo.
 **D8: tsconfig extends usa rutas relativas**
 Igual que EUCAR v2. Los editores no resuelven nombres de paquete de workspaces.
 
+**D9: Calorías requeridas en actividad y comidas**
+`calorias` es `NOT NULL` en `RegistroActividad` y `RegistroComida`. El campo es obligatorio en los formularios y en los DTOs del backend. La razón es que el balance calórico diario (consumidas vs. quemadas) es una feature central del dashboard y del contexto RAG del chat IA — sin datos consistentes, la feature no funciona. No volver a hacerlo opcional.
+
 ---
 
 ## Arquitectura del Backend (NestJS)
@@ -140,8 +143,10 @@ backend/
 - **Progreso y Actividad separados**: `/progreso` (peso + medidas con tabs) y `/actividad` (actividad física)
 - **Alimentación**: navegador de fechas prev/next; vista del día agrupada por momento
 - **Gráfico de peso**: Recharts con `dynamic({ ssr: false })` — evita errores de DOM en SSR
-- **Responses**: `/progreso/*` y `/actividad` devuelven `PaginatedResult<T>` sin wrapper; `/alimentacion/*` devuelve `{ data: T }`
+- **Responses**: `/progreso/*` (paginados) y `/alimentacion/*` devuelven `{ data: T }`; la excepción es que los endpoints de listado paginado devuelven `PaginatedResult<T>` directamente sin wrapper
 - **tsconfig paths**: `"@/*": ["./*"]` (raíz del frontend, no `./src/*`)
+- **Calorías obligatorias**: `calorias` requerido en actividad y comidas (ver D9) — formularios con error explícito, sin valor opcional
+- **Balance calórico**: `GET /progreso/resumen-calorias?fecha=YYYY-MM-DD` → `{ data: { consumidas, quemadas, balance } }`. Hook `useResumenCalorias(fecha?)`. Se invalida con `queryKey: ["resumen-calorias"]` al guardar comida o actividad.
 
 ```
 frontend/
@@ -155,7 +160,7 @@ frontend/
 │   │   └── register/page.tsx    # RHF+Zod → POST /auth/register → GET /usuarios/me
 │   ├── (dashboard)/
 │   │   ├── layout.tsx           # Auth guard (mounted check) + Sidebar + MobileHeader
-│   │   ├── dashboard/page.tsx   # Métricas, gráfico Recharts, resumen semanal
+│   │   ├── dashboard/page.tsx   # Métricas, gráfico Recharts, balance calórico, resumen semanal
 │   │   ├── progreso/page.tsx    # Tabs Peso/Medidas — formularios + historial timeline
 │   │   ├── actividad/page.tsx   # Selector visual de tipo + historial con badges
 │   │   ├── alimentacion/page.tsx # Selector de momento + DateNavigator + vista del día
@@ -174,7 +179,7 @@ frontend/
 │   │   └── PesoChart.tsx        # Recharts AreaChart — importar con dynamic({ ssr: false })
 │   └── chat/                    # ChatInterface, MessageBubble (Fase 3)
 ├── hooks/                       # Tanstack Query hooks por entidad
-│   ├── useProgreso.ts           # usePesos, useMedidas, useActividad
+│   ├── useProgreso.ts           # usePesos, useMedidas, useActividad, useResumenCalorias
 │   ├── useAlimentacion.ts       # useComidasDelDia(fecha?)
 │   ├── useContenido.ts          # (Fase 3)
 │   └── useChat.ts               # (Fase 3)
@@ -254,19 +259,19 @@ model RegistroActividad {
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   tipo        String   // "CAMINATA" | "GYM" | "NATACION" | "CICLISMO" | "OTRO"
   duracion    Int      // en minutos
-  calorias    Int?     // estimado
+  calorias    Int      // requerido — habilita el balance calórico diario (ver D9)
   fecha       DateTime @default(now())
   nota        String?
 }
 
 model RegistroComida {
-  id        String   @id @default(cuid())
-  usuarioId String
-  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  momento   String   // "DESAYUNO" | "ALMUERZO" | "MERIENDA" | "CENA" | "SNACK"
-  descripcion String // texto libre — sin base de datos nutricional en MVP
-  calorias  Int?     // opcional, el usuario puede estimarlo
-  fecha     DateTime @default(now())
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  momento     String   // "DESAYUNO" | "ALMUERZO" | "MERIENDA" | "CENA" | "SNACK"
+  descripcion String   // texto libre — sin base de datos nutricional en MVP
+  calorias    Int      // requerido — habilita el balance calórico diario (ver D9)
+  fecha       DateTime @default(now())
 }
 
 model Articulo {
@@ -385,10 +390,11 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 ### Fase 2 — Dashboard + Progreso ✅
 - [x] **Home/Landing page atractiva** — `/` Server Component, Fraunces + DM Sans, paleta crema/bosque/ámbar, animaciones CSS scroll-driven
 - [x] Frontend base: layout con sidebar (bg-forest, rounded-r-3xl), auth guard con mounted check anti-hydration, Zustand stores, Axios + Tanstack Query
-- [x] Dashboard con gráfico de peso (Recharts AreaChart, dynamic SSR-off), tarjetas de métricas y resumen semanal
+- [x] Dashboard con gráfico de peso (Recharts AreaChart, dynamic SSR-off), tarjetas de métricas, balance calórico diario y resumen semanal
 - [x] Registro de peso y medidas — `/progreso`, tabs Peso/Medidas, formularios RHF+Zod, historial con timeline
-- [x] Registro de actividad física — `/actividad`, selector visual de tipo (5 botones), historial con badges por tipo
-- [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, navegador de fechas (prev/next), vista del día agrupada por momento
+- [x] Registro de actividad física — `/actividad`, selector visual de tipo (5 botones), calorías requeridas, historial con badges por tipo
+- [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, calorías requeridas, navegador de fechas (prev/next), vista del día agrupada por momento
+- [x] **Balance calórico** — `calorias` NOT NULL en schema, endpoint `GET /progreso/resumen-calorias`, tarjeta "Balance de hoy" en dashboard (consumidas / quemadas / neto)
 
 ### Fase 3 — Contenido + Chat IA ⬜
 - [ ] Backend: módulo de artículos (CRUD admin + listado público)

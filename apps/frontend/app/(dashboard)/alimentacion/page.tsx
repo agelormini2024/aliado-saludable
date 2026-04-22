@@ -74,7 +74,12 @@ const comidaSchema = z.object({
       const n = Math.round(Number(val));
       return isNaN(n) ? undefined : n;
     },
-    z.number().min(0, "Las calorías no pueden ser negativas").optional(),
+    z
+      .number({
+        required_error: "Ingresá las calorías estimadas",
+        invalid_type_error: "Ingresá un número válido",
+      })
+      .min(0, "Las calorías no pueden ser negativas"),
   ),
 });
 
@@ -234,17 +239,17 @@ function FormComida({ selectedDate }: { selectedDate: string }) {
 
   const mutation = useMutation({
     mutationFn: async (data: ComidaFormData) => {
-      const body: Record<string, unknown> = {
+      await api.post("/alimentacion/comidas", {
         momento: data.momento,
         descripcion: data.descripcion,
+        calorias: data.calorias,
         fecha: selectedDate,
-      };
-      if (data.calorias !== undefined) body.calorias = data.calorias;
-      await api.post("/alimentacion/comidas", body);
+      });
     },
     onSuccess: (_, submitted) => {
       queryClient.invalidateQueries({ queryKey: ["comidas"] });
-      reset({ momento: submitted.momento, descripcion: "", calorias: undefined });
+      queryClient.invalidateQueries({ queryKey: ["resumen-calorias"] });
+      reset({ momento: submitted.momento, descripcion: "" });
     },
   });
 
@@ -307,7 +312,7 @@ function FormComida({ selectedDate }: { selectedDate: string }) {
 
         {/* ── Calorías ── */}
         <Field
-          label="Calorías estimadas (opcional)"
+          label="Calorías estimadas"
           unit="cal"
           error={errors.calorias?.message}
         >
@@ -360,7 +365,7 @@ function VistaDia({ fecha }: { fecha: string }) {
   const { data: comidas, isLoading } = useComidasDelDia(fecha);
 
   const totalCal = useMemo(
-    () => (comidas ?? []).reduce((sum, c) => sum + (c.calorias ?? 0), 0),
+    () => (comidas ?? []).reduce((sum, c) => sum + c.calorias, 0),
     [comidas],
   );
 
@@ -441,11 +446,9 @@ function VistaDia({ fecha }: { fecha: string }) {
                     <p className="flex-1 font-sans text-sm leading-snug text-ink">
                       {item.descripcion}
                     </p>
-                    {item.calorias != null && (
-                      <span className="shrink-0 font-sans text-xs text-ink-muted">
-                        {item.calorias} cal
-                      </span>
-                    )}
+                    <span className="shrink-0 font-sans text-xs text-ink-muted">
+                      {item.calorias} cal
+                    </span>
                   </div>
                 ))}
               </div>

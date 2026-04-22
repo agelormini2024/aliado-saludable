@@ -4,6 +4,8 @@
  * La API de progreso devuelve PaginatedResult<T> directamente, sin wrapper { data }:
  * GET /progreso/peso → { items: RegistroPeso[], meta: { total, page, limit, totalPages } }
  *
+ * La excepción es /progreso/resumen-calorias que sí usa wrapper { data }.
+ *
  * Los registros vienen ordenados por fecha desc (más reciente primero).
  * Para el gráfico hay que invertirlos antes de pasarlos a Recharts.
  */
@@ -39,9 +41,16 @@ export interface RegistroActividad {
   usuarioId: string;
   tipo: string; // CAMINATA | GYM | NATACION | CICLISMO | OTRO
   duracion: number; // minutos
-  calorias?: number | null;
+  calorias: number; // requerido — siempre presente
   fecha: string; // ISO 8601
   nota?: string | null;
+}
+
+/** Balance calórico diario: consumidas (comidas) vs. quemadas (actividad) */
+export interface ResumenCalorias {
+  consumidas: number;
+  quemadas: number;
+  balance: number;
 }
 
 export interface PaginationMeta {
@@ -102,6 +111,25 @@ export function useActividad(limit = 30) {
         `/progreso/actividad?limit=${limit}&page=1`,
       );
       return res.data;
+    },
+  });
+}
+
+/**
+ * Devuelve el balance calórico del día indicado.
+ * Si no se pasa fecha, usa hoy. Se invalida cuando se registran comidas o actividades.
+ *
+ * @param fecha - Fecha en formato YYYY-MM-DD (default: hoy)
+ */
+export function useResumenCalorias(fecha?: string) {
+  const fechaParam = fecha ?? new Date().toISOString().split("T")[0];
+  return useQuery({
+    queryKey: ["resumen-calorias", fechaParam],
+    queryFn: async () => {
+      const res = await api.get<{ data: ResumenCalorias }>(
+        `/progreso/resumen-calorias?fecha=${fechaParam}`,
+      );
+      return res.data.data;
     },
   });
 }

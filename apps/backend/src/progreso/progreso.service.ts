@@ -16,6 +16,16 @@ export interface PaginatedResult<T> {
 }
 
 /**
+ * Balance calórico de un día: calorías consumidas (comidas) vs. quemadas (actividad).
+ * El balance es consumidas - quemadas: positivo = superávit, negativo = déficit.
+ */
+export interface ResumenCalorias {
+  consumidas: number;
+  quemadas: number;
+  balance: number;
+}
+
+/**
  * ProgresoService — lógica de negocio para registros de progreso
  *
  * Gestiona tres tipos de registros: peso, medidas corporales y actividad física.
@@ -182,5 +192,45 @@ export class ProgresoService {
       items,
       meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
+  }
+
+  // ─── RESUMEN CALÓRICO ─────────────────────────────────────────────────────
+
+  /**
+   * Calcula el balance calórico de un día: comidas consumidas vs. actividad quemada.
+   *
+   * Usa `aggregate` de Prisma para sumar las calorías en una sola query por tabla,
+   * lo que es más eficiente que traer todos los registros y sumarlos en memoria.
+   *
+   * @param usuarioId - ID del usuario autenticado
+   * @param fecha - Fecha a consultar (YYYY-MM-DD). Default: hoy.
+   * @returns Calorías consumidas, quemadas y balance neto del día
+   */
+  async resumenCalorias(usuarioId: string, fecha?: string): Promise<ResumenCalorias> {
+    const diaBase = fecha ? new Date(fecha) : new Date();
+
+    const inicioDia = new Date(diaBase);
+    inicioDia.setHours(0, 0, 0, 0);
+
+    const finDia = new Date(diaBase);
+    finDia.setHours(23, 59, 59, 999);
+
+    const rangoDia = { gte: inicioDia, lte: finDia };
+
+    const [sumaComidas, sumaActividades] = await this.prisma.$transaction([
+      this.prisma.registroComida.aggregate({
+        _sum: { calorias: true },
+        where: { usuarioId, fecha: rangoDia },
+      }),
+      this.prisma.registroActividad.aggregate({
+        _sum: { calorias: true },
+        where: { usuarioId, fecha: rangoDia },
+      }),
+    ]);
+
+    const consumidas = sumaComidas._sum.calorias ?? 0;
+    const quemadas = sumaActividades._sum.calorias ?? 0;
+
+    return { consumidas, quemadas, balance: consumidas - quemadas };
   }
 }

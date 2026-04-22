@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Query, UseGuards } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiQuery } from "@nestjs/swagger";
-import { ProgresoService, PaginatedResult } from "./progreso.service";
+import { ProgresoService, PaginatedResult, ResumenCalorias } from "./progreso.service";
 import { CreatePesoDto } from "./dto/create-peso.dto";
 import { CreateMedidasDto } from "./dto/create-medidas.dto";
 import { CreateActividadDto } from "./dto/create-actividad.dto";
@@ -17,12 +17,13 @@ import { Usuario, RegistroPeso, RegistroMedidas, RegistroActividad } from "@pris
  * progreso a nombre de otro usuario.
  *
  * Rutas:
- * - POST /progreso/peso          → registrar nuevo peso
- * - GET  /progreso/peso          → historial de pesos (paginado)
- * - POST /progreso/medidas       → registrar medidas
- * - GET  /progreso/medidas       → historial de medidas (paginado)
- * - POST /progreso/actividad     → registrar actividad física
- * - GET  /progreso/actividad     → historial de actividad (paginado)
+ * - POST /progreso/peso                  → registrar nuevo peso
+ * - GET  /progreso/peso                  → historial de pesos (paginado)
+ * - POST /progreso/medidas               → registrar medidas
+ * - GET  /progreso/medidas               → historial de medidas (paginado)
+ * - POST /progreso/actividad             → registrar actividad física
+ * - GET  /progreso/actividad             → historial de actividad (paginado)
+ * - GET  /progreso/resumen-calorias      → balance calórico del día (consumidas / quemadas)
  */
 @ApiTags("Progreso")
 @ApiBearerAuth()
@@ -97,5 +98,23 @@ export class ProgresoController {
     @Query() query: PaginationQueryDto,
   ): Promise<PaginatedResult<RegistroActividad>> {
     return this.progresoService.listarActividades(usuario.id, query);
+  }
+
+  // ─── RESUMEN CALÓRICO ─────────────────────────────────────────────────────
+
+  /**
+   * Devuelve el balance calórico del día: calorías consumidas (comidas) vs. quemadas (actividad).
+   *
+   * @param fecha - Fecha a consultar en formato YYYY-MM-DD (default: hoy)
+   */
+  @ApiOperation({ summary: "Balance calórico del día (consumidas vs. quemadas)" })
+  @ApiQuery({ name: "fecha", required: false, description: "Fecha YYYY-MM-DD (default: hoy)" })
+  @Get("resumen-calorias")
+  async resumenCalorias(
+    @CurrentUser() usuario: Usuario,
+    @Query("fecha") fecha?: string,
+  ): Promise<{ data: ResumenCalorias }> {
+    const resumen = await this.progresoService.resumenCalorias(usuario.id, fecha);
+    return { data: resumen };
   }
 }

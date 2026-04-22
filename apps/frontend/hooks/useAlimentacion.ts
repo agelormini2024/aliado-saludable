@@ -16,7 +16,7 @@ export interface RegistroComida {
   usuarioId: string;
   momento: string; // DESAYUNO | ALMUERZO | MERIENDA | CENA | SNACK
   descripcion: string;
-  calorias?: number | null;
+  calorias: number; // requerido — siempre presente
   fecha: string; // ISO 8601
 }
 

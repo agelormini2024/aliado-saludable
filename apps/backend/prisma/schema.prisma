@@ -138,7 +138,7 @@ model RegistroMedidas {
 //
 // Un registro de actividad física del usuario.
 // El tipo es texto libre categorizado: CAMINATA, GYM, NATACION, CICLISMO, OTRO.
-// Las calorías son opcionales y estimadas por el usuario.
+// Las calorías son requeridas para habilitar el balance calórico diario.
 // =============================================================================
 model RegistroActividad {
   id        String   @id @default(cuid())
@@ -146,7 +146,7 @@ model RegistroActividad {
   usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   tipo      String   // "CAMINATA" | "GYM" | "NATACION" | "CICLISMO" | "OTRO"
   duracion  Int      // en minutos
-  calorias  Int?     // estimado opcional
+  calorias  Int      // estimado requerido
   fecha     DateTime @default(now())
   nota      String?
 
@@ -159,6 +159,7 @@ model RegistroActividad {
 // Un registro de ingesta del usuario en un momento del día.
 // La descripción es texto libre para el MVP (sin base de datos nutricional).
 // El campo "momento" indica en qué parte del día ocurrió la comida.
+// Las calorías son requeridas para habilitar el balance calórico diario.
 // =============================================================================
 model RegistroComida {
   id          String   @id @default(cuid())
@@ -166,7 +167,7 @@ model RegistroComida {
   usuario     Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   momento     String   // "DESAYUNO" | "ALMUERZO" | "MERIENDA" | "CENA" | "SNACK"
   descripcion String   // texto libre
-  calorias    Int?     // estimado opcional
+  calorias    Int      // estimado requerido
   fecha       DateTime @default(now())
 
   @@index([usuarioId, fecha])
