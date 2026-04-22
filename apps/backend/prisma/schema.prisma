@@ -192,6 +192,26 @@ model Articulo {
 }
 
 // =============================================================================
+// Model: Documento
+//
+// Archivo subido por el Admin (PDF o .docx) con contenido de interés.
+// El texto se extrae en el servidor al momento de la carga y se almacena
+// en `contenido` para que el RAG lo pueda fragmentar e indexar igual que
+// los artículos. El archivo original se conserva para descarga.
+// =============================================================================
+model Documento {
+  id          String   @id @default(cuid())
+  nombre      String   // nombre original del archivo (ej: "guia-alimentacion.pdf")
+  mimeType    String   // "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  contenido   String   // texto extraído del archivo — lo que se indexa en RAG
+  archivoPath String   // ruta relativa en disco (para servir la descarga)
+  publicado   Boolean  @default(false)
+  autorId     String?  // ID del admin que lo subió (referencia lógica, sin FK)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// =============================================================================
 // NOTA: EmbeddingDocument se agrega en Fase 3 (RAG + Chat IA).
 //
 // Requiere la extensión pgvector instalada en PostgreSQL y una migración

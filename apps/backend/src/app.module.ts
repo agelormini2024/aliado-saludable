@@ -7,6 +7,7 @@ import { AuthModule } from "./auth/auth.module";
 import { UsuariosModule } from "./usuarios/usuarios.module";
 import { ProgresoModule } from "./progreso/progreso.module";
 import { AlimentacionModule } from "./alimentacion/alimentacion.module";
+import { ContenidoModule } from "./contenido/contenido.module";
 
 /**
  * AppModule — módulo raíz de la aplicación
@@ -16,6 +17,7 @@ import { AlimentacionModule } from "./alimentacion/alimentacion.module";
  * 2. PrismaModule  → base de datos (global)
  * 3. AuthModule    → autenticación y autorización
  * 4. UsuariosModule, ProgresoModule, AlimentacionModule → funcionalidad de negocio
+ * 5. ContenidoModule → artículos informativos (Fase 3)
  */
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { AlimentacionModule } from "./alimentacion/alimentacion.module";
     UsuariosModule,
     ProgresoModule,
     AlimentacionModule,
+    ContenidoModule,
   ],
   controllers: [AppController],
   providers: [AppService],

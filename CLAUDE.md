@@ -88,6 +88,9 @@ Igual que EUCAR v2. Los editores no resuelven nombres de paquete de workspaces.
 **D9: Calorías requeridas en actividad y comidas**
 `calorias` es `NOT NULL` en `RegistroActividad` y `RegistroComida`. El campo es obligatorio en los formularios y en los DTOs del backend. La razón es que el balance calórico diario (consumidas vs. quemadas) es una feature central del dashboard y del contexto RAG del chat IA — sin datos consistentes, la feature no funciona. No volver a hacerlo opcional.
 
+**D10: Documentos PDF/.docx como fuente RAG junto a los artículos**
+El Admin puede subir documentos en `POST /contenido/documentos` (multipart/form-data). El texto se extrae en el servidor con `pdf-parse` (PDF) y `mammoth` (DOCX) y se guarda en `Documento.contenido`. Los archivos físicos se guardan en `uploads/documentos/`. En Fase 5 (deploy) se migra a Supabase Storage cambiando solo el servicio de storage. En RAG se indexan con `tipo = "DOCUMENTO"` igual que los artículos.
+
 ---
 
 ## Arquitectura del Backend (NestJS)
@@ -112,8 +115,11 @@ backend/
 │   │   ├── comidas.service.ts   # Registro de comidas del día
 │   │   └── alimentos.service.ts # Catálogo básico de alimentos con calorías
 │   ├── contenido/
-│   │   ├── articulos.service.ts # Artículos/guías (CRUD admin)
-│   │   └── categorias.service.ts
+│   │   ├── contenido.service.ts  # Artículos: CRUD admin + listado público con paginación
+│   │   ├── contenido.controller.ts
+│   │   ├── documento.service.ts  # Documentos PDF/.docx: upload, extracción de texto, CRUD
+│   │   ├── documento.controller.ts
+│   │   └── dto/                  # create-articulo, update-articulo, update-documento
 │   ├── ai/
 │   │   ├── chat.service.ts      # Orquesta RAG → prompt → stream
 │   │   ├── rag.service.ts       # Embeddings + búsqueda vectorial
@@ -277,7 +283,7 @@ model RegistroComida {
 model Articulo {
   id          String   @id @default(cuid())
   titulo      String
-  contenido   String   // texto largo
+  contenido   String   // texto largo en markdown
   categoria   String   // "NUTRICION" | "EJERCICIO" | "BIENESTAR"
   publicado   Boolean  @default(false)
   autorId     String?  // admin que lo escribió
@@ -285,11 +291,23 @@ model Articulo {
   updatedAt   DateTime @updatedAt
 }
 
+model Documento {
+  id          String   @id @default(cuid())
+  nombre      String   // nombre original del archivo (ej: "guia-alimentacion.pdf")
+  mimeType    String   // "application/pdf" | "...wordprocessingml.document"
+  contenido   String   // texto extraído del archivo — lo que se indexa en RAG
+  archivoPath String   // ruta relativa en disco (para servir la descarga)
+  publicado   Boolean  @default(false)
+  autorId     String?  // ID del admin que lo subió
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model EmbeddingDocument {
   id           String   @id @default(cuid())
-  tipo         String   // "PESO" | "MEDIDAS" | "ACTIVIDAD" | "COMIDA" | "ARTICULO"
+  tipo         String   // "PESO" | "MEDIDAS" | "ACTIVIDAD" | "COMIDA" | "ARTICULO" | "DOCUMENTO"
   referenciaId String
-  usuarioId    String?  // null para artículos (son globales)
+  usuarioId    String?  // null para artículos y documentos (son globales)
   contenido    String   // texto plano para búsqueda
   embedding    Unsupported("vector(1536)")?
   createdAt    DateTime @default(now())
@@ -322,10 +340,12 @@ El sistema los fragmenta y genera embeddings. Control total, sin dependencias ex
 URLs confiables predefinidas por el Admin, extrae el texto y actualiza los embeddings.
 Más automatizado pero más frágil (cambios en los sitios rompen el scraping).
 
-**Decisión**: arrancar con Opción A. El schema ya lo soporta con `tipo = "ARTICULO"`.
-Cuando se agregue scraping, simplemente se agrega `tipo = "DOCUMENTO_WEB"` sin tocar
-el resto del sistema. El campo `usuarioId = null` indica que el documento es global
-(no pertenece a un usuario particular).
+**Decisión**: Opción A implementada en Fase 3. El sistema soporta dos tipos de contenido global:
+- **Artículos** (texto markdown creado via form) → `tipo = "ARTICULO"` en EmbeddingDocument
+- **Documentos** (PDF/.docx subidos por el Admin) → `tipo = "DOCUMENTO"` en EmbeddingDocument
+
+El texto se extrae automáticamente con `pdf-parse` (PDF) y `mammoth` (DOCX). Los archivos se guardan en `uploads/documentos/` localmente; en Fase 5 se migra a Supabase Storage.
+Cuando se agregue scraping, simplemente se agrega `tipo = "DOCUMENTO_WEB"` sin tocar el resto del sistema. El campo `usuarioId = null` indica que el contenido es global (no pertenece a un usuario particular).
 
 ---
 
@@ -338,6 +358,7 @@ el resto del sistema. El campo `usuarioId = null` indica que el documento es glo
 | `ACTIVIDAD` | "Caminata de 45 minutos el 12/04, estimé 280 calorías" | "¿Cuántos días hice ejercicio?" |
 | `COMIDA` | "Almuerzo del 14/04: ensalada con pollo, aprox 450 cal" | "¿Qué comí esta semana?" |
 | `ARTICULO` | Texto completo del artículo (global, no por usuario) | Preguntas sobre nutrición/ejercicio |
+| `DOCUMENTO` | Texto extraído del PDF/.docx (global, no por usuario) | Preguntas sobre el contenido del documento |
 
 El Chat IA combina:
 - **Estadísticas en tiempo real**: peso actual, meta, días registrados, tendencia
@@ -396,12 +417,14 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, calorías requeridas, navegador de fechas (prev/next), vista del día agrupada por momento
 - [x] **Balance calórico** — `calorias` NOT NULL en schema, endpoint `GET /progreso/resumen-calorias`, tarjeta "Balance de hoy" en dashboard (consumidas / quemadas / neto)
 
-### Fase 3 — Contenido + Chat IA ⬜
-- [ ] Backend: módulo de artículos (CRUD admin + listado público)
-- [ ] pgvector: migración + EmbeddingDocument
-- [ ] RAG: indexación de registros del usuario + artículos
-- [ ] Chat IA con contexto personal + artículos relacionados
-- [ ] Frontend: sección de artículos + interfaz de chat
+### Fase 3 — Contenido + Chat IA 🔄
+- [x] **T1: Backend módulo de artículos** — CRUD completo, RBAC (ADMIN escribe, USUARIO lee), paginación + filtro por categoría, Swagger decorado
+- [x] **T1b: Documentos PDF/.docx** — upload multipart, extracción de texto (pdf-parse / mammoth), almacenamiento en disco, descarga del original; modelo `Documento` en schema
+- [ ] T2: pgvector: compilar desde fuente en macOS 13, migración + EmbeddingDocument
+- [ ] T3: RAG: indexación de registros del usuario + artículos + documentos
+- [ ] T4: Chat IA backend (POST /ai/chat, sin streaming en MVP)
+- [ ] T5: Frontend: sección de artículos + documentos (`/contenido`)
+- [ ] T6: Frontend: interfaz de chat (`/chat`)
 
 ### Fase 4 — Panel Coach ⬜
 - [ ] Backend: módulo coaches, asignación de pacientes
