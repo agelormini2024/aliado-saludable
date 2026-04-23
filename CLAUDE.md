@@ -153,6 +153,9 @@ backend/
 - **tsconfig paths**: `"@/*": ["./*"]` (raíz del frontend, no `./src/*`)
 - **Calorías obligatorias**: `calorias` requerido en actividad y comidas (ver D9) — formularios con error explícito, sin valor opcional
 - **Balance calórico**: `GET /progreso/resumen-calorias?fecha=YYYY-MM-DD` → `{ data: { consumidas, quemadas, balance } }`. Hook `useResumenCalorias(fecha?)`. Se invalida con `queryKey: ["resumen-calorias"]` al guardar comida o actividad.
+- **Timezone**: nunca usar `new Date().toISOString().split("T")[0]` para obtener "hoy" — devuelve fecha UTC. Usar `todayLocal()` de `lib/date.ts` que usa `getFullYear/getMonth/getDate` (hora local). Aplica en hooks `useResumenCalorias`, `useComidasDelDia` y en los `getTodayISO()` de los formularios de progreso, actividad y alimentación.
+- **PesoChart label**: el último punto del gráfico muestra una tarjeta SVG (`UltimoLabel`) siempre visible con el peso actual. Requiere `isFinite(cx) && isFinite(cy)` como guard porque Recharts pasa `NaN` en el primer render. El margen superior del chart es `top: 56` para que la tarjeta no se corte.
+- **DateNavigator (alimentación)**: cuando es hoy muestra "Hoy · 22 abr." (no solo "Hoy") para que siempre sea visible la fecha real.
 
 ```
 frontend/
@@ -184,11 +187,14 @@ frontend/
 │   │   ├── MobileHeader.tsx     # lg:hidden, hamburger, logo, avatar inicial
 │   │   └── PesoChart.tsx        # Recharts AreaChart — importar con dynamic({ ssr: false })
 │   └── chat/                    # ChatInterface, MessageBubble (Fase 3)
+├── lib/
+│   ├── api.ts                   # Axios con baseURL NEXT_PUBLIC_API_URL, interceptor Bearer
+│   └── date.ts                  # todayLocal() — fecha local YYYY-MM-DD (no usar toISOString)
 ├── hooks/                       # Tanstack Query hooks por entidad
 │   ├── useProgreso.ts           # usePesos, useMedidas, useActividad, useResumenCalorias
 │   ├── useAlimentacion.ts       # useComidasDelDia(fecha?)
-│   ├── useContenido.ts          # (Fase 3)
-│   └── useChat.ts               # (Fase 3)
+│   ├── useContenido.ts          # useArticulos, useArticulo, useDocumentos (Fase 3 T5)
+│   └── useChat.ts               # (Fase 3 T6)
 └── stores/                      # Zustand — SOLO UI state
     ├── auth.store.ts            # persist en localStorage ("aliado-auth"), AuthUsuario
     └── ui.store.ts              # sidebarOpen

@@ -87,8 +87,10 @@ type ComidaFormData = z.infer<typeof comidaSchema>;
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 
+/** Fecha de hoy en formato "YYYY-MM-DD" según hora local (no UTC) */
 function getTodayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -165,7 +167,8 @@ function DateNavigator({
   const moveDay = (dir: -1 | 1) => {
     const d = new Date(fecha + "T12:00:00");
     d.setDate(d.getDate() + dir);
-    const next = d.toISOString().split("T")[0];
+    // Usar getFullYear/Month/Date (local) en lugar de toISOString (UTC)
+    const next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     if (dir === 1 && next > getTodayISO()) return;
     onChange(next);
   };
@@ -187,8 +190,10 @@ function DateNavigator({
         </svg>
       </button>
 
-      <span className="min-w-28 text-center font-sans text-sm font-medium text-ink-muted">
-        {isToday ? "Hoy" : formatFechaCorta(fecha)}
+      <span className="min-w-36 text-center font-sans text-sm font-medium text-ink-muted">
+        {isToday
+          ? `Hoy · ${new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" }).format(new Date(fecha + "T12:00:00"))}`
+          : formatFechaCorta(fecha)}
       </span>
 
       <button

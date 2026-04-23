@@ -85,9 +85,10 @@ type ActividadFormData = z.infer<typeof actividadSchema>;
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 
-/** Fecha de hoy en formato "YYYY-MM-DD" para el input type="date" */
+/** Fecha de hoy en formato "YYYY-MM-DD" según hora local (no UTC) */
 function getTodayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 /** Formatea fecha ISO a "15 abr" en español argentino */

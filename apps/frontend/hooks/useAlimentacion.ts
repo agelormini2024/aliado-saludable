@@ -10,6 +10,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { todayLocal } from "@/lib/date";
 
 export interface RegistroComida {
   id: string;
@@ -25,7 +26,7 @@ export interface RegistroComida {
  * Si no se pasa fecha, usa hoy (YYYY-MM-DD en hora local).
  */
 export function useComidasDelDia(fecha?: string) {
-  const fechaParam = fecha ?? new Date().toISOString().split("T")[0];
+  const fechaParam = fecha ?? todayLocal();
   return useQuery({
     queryKey: ["comidas", fechaParam],
     queryFn: async () => {

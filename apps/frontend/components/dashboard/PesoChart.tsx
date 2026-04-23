@@ -51,6 +51,63 @@ function CustomTooltip({ active, payload }: TooltipProps) {
   );
 }
 
+/* ─── Label permanente del último punto ───────────────────────────────────── */
+
+/**
+ * UltimoLabel — tarjeta SVG siempre visible sobre el último punto del gráfico.
+ *
+ * Recharts inyecta `viewBox` (con cx/cy) en el componente pasado como `label`
+ * a ReferenceDot. El peso extra se pasa como prop propio al crear el elemento.
+ */
+interface UltimoLabelProps {
+  viewBox?: { cx: number; cy: number };
+  peso: number;
+}
+
+function UltimoLabel({ viewBox, peso }: UltimoLabelProps) {
+  if (!viewBox) return null;
+  const { cx, cy } = viewBox;
+  // Recharts pasa NaN en el primer render antes de calcular posiciones
+  if (!isFinite(cx) || !isFinite(cy)) return null;
+  const width = 70;
+  const height = 34;
+  const cardY = cy - height - 14;
+
+  return (
+    <g>
+      {/* Card de fondo */}
+      <rect x={cx - width / 2} y={cardY} width={width} height={height} rx={9} fill="#1E5631" />
+      {/* Triángulo conector hacia el dot */}
+      <polygon
+        points={`${cx - 6},${cy - 14} ${cx + 6},${cy - 14} ${cx},${cy - 6}`}
+        fill="#1E5631"
+      />
+      {/* Texto del peso */}
+      <text
+        x={cx}
+        y={cardY + height / 2}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#F7F4EE"
+        fontSize={15}
+        fontStyle="italic"
+        fontFamily="'Fraunces', Georgia, serif"
+      >
+        {peso}
+        <tspan
+          fontSize={11}
+          fontStyle="normal"
+          fontFamily="'DM Sans', sans-serif"
+          fill="#a8c5af"
+          dx={2}
+        >
+          kg
+        </tspan>
+      </text>
+    </g>
+  );
+}
+
 /* ─── Componente principal ────────────────────────────────────────────────── */
 
 export function PesoChart({ data }: { data: ChartDataPoint[] }) {
@@ -58,7 +115,8 @@ export function PesoChart({ data }: { data: ChartDataPoint[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={240}>
-      <AreaChart data={data} margin={{ top: 12, right: 8, left: -16, bottom: 0 }}>
+      {/* top: 56 para que la tarjeta del último punto (34px + 14px gap) no se corte */}
+      <AreaChart data={data} margin={{ top: 56, right: 8, left: -16, bottom: 0 }}>
         <defs>
           <linearGradient id="pesoGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#1E5631" stopOpacity={0.12} />
@@ -104,7 +162,7 @@ export function PesoChart({ data }: { data: ChartDataPoint[] }) {
           activeDot={{ r: 5, fill: "#1E5631", stroke: "#f7f4ee", strokeWidth: 2 }}
         />
 
-        {/* Último punto marcado en ámbar */}
+        {/* Último punto marcado en ámbar con tarjeta de peso siempre visible */}
         {lastPoint && (
           <ReferenceDot
             x={lastPoint.fechaLabel}
@@ -113,6 +171,7 @@ export function PesoChart({ data }: { data: ChartDataPoint[] }) {
             fill="#C97D4B"
             stroke="#f7f4ee"
             strokeWidth={2}
+            label={<UltimoLabel peso={lastPoint.peso} />}
           />
         )}
       </AreaChart>

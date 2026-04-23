@@ -13,6 +13,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { todayLocal } from "@/lib/date";
 
 /* ─── Tipos ────────────────────────────────────────────────────────────────── */
 
@@ -122,7 +123,7 @@ export function useActividad(limit = 30) {
  * @param fecha - Fecha en formato YYYY-MM-DD (default: hoy)
  */
 export function useResumenCalorias(fecha?: string) {
-  const fechaParam = fecha ?? new Date().toISOString().split("T")[0];
+  const fechaParam = fecha ?? todayLocal();
   return useQuery({
     queryKey: ["resumen-calorias", fechaParam],
     queryFn: async () => {
