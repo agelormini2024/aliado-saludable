@@ -25,7 +25,6 @@ import {
   ApiBody,
 } from "@nestjs/swagger";
 import { Response } from "express";
-import * as path from "path";
 import { DocumentoService, DocumentosResult, MIME_TYPES_PERMITIDOS } from "./documento.service";
 import { UpdateDocumentoDto } from "./dto/update-documento.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
