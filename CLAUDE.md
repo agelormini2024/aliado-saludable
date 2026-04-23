@@ -425,11 +425,11 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 
 ### Fase 3 — Contenido + Chat IA 🔄
 - [x] **T1: Backend módulo de artículos** — CRUD completo, RBAC (ADMIN escribe, USUARIO lee), paginación + filtro por categoría, Swagger decorado
-- [x] **T1b: Documentos PDF/.docx** — upload multipart, extracción de texto (pdf-parse / mammoth), almacenamiento en disco, descarga del original; modelo `Documento` en schema
+- [x] **T1b: Documentos PDF/.docx** — upload multipart, extracción de texto (pdf-parse 1.1.1 / mammoth), almacenamiento en disco, descarga del original; modelo `Documento` en schema
+- [x] **T5: Frontend sección `/contenido`** — artículos con filtro por categoría + CRUD admin (crear/editar/eliminar via modal RHF+Zod); documentos con descarga blob autenticada + CRUD admin (upload fetch nativo, toggle publicado, eliminar); hooks `useArticulos`, `useArticulo`, `useDocumentos`; detalle de artículo en `/contenido/[id]` con markdown básico
 - [ ] T2: pgvector: compilar desde fuente en macOS 13, migración + EmbeddingDocument
 - [ ] T3: RAG: indexación de registros del usuario + artículos + documentos
 - [ ] T4: Chat IA backend (POST /ai/chat, sin streaming en MVP)
-- [ ] T5: Frontend: sección de artículos + documentos (`/contenido`)
 - [ ] T6: Frontend: interfaz de chat (`/chat`)
 
 ### Fase 4 — Panel Coach ⬜

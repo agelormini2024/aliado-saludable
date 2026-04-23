@@ -274,12 +274,12 @@ function ModalArticulo({
                   role="switch"
                   aria-checked={field.value}
                   onClick={() => field.onChange(!field.value)}
-                  className={`relative h-6 w-11 rounded-full transition-colors duration-200 ${
+                  className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ${
                     field.value ? "bg-forest" : "bg-cream-dark"
                   }`}
                 >
                   <span
-                    className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${
                       field.value ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
