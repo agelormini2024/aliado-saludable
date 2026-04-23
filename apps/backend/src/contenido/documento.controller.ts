@@ -14,6 +14,7 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import {
   ApiTags,
   ApiOperation,
@@ -82,7 +83,7 @@ export class DocumentoController {
     FileInterceptor("archivo", {
       // memoryStorage: el buffer queda disponible en archivo.buffer
       // sin guardar nada en disco — DocumentoService decide la ruta final
-      storage: undefined,
+      storage: memoryStorage(),
       limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB máximo
       fileFilter: (_req, file, callback) => {
         if ((MIME_TYPES_PERMITIDOS as readonly string[]).includes(file.mimetype)) {
