@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
+import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
 import * as fs from "fs";
 import * as path from "path";
 import { PrismaService } from "../database/prisma.service";
+import { RagService } from "../ai/rag.service";
 import { UpdateDocumentoDto } from "./dto/update-documento.dto";
 import { Documento } from "@prisma/client";
 
@@ -44,7 +45,12 @@ export interface DocumentosResult {
  */
 @Injectable()
 export class DocumentoService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DocumentoService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   /**
    * Extrae el texto plano de un archivo PDF o DOCX.
@@ -99,7 +105,7 @@ export class DocumentoService {
 
     fs.writeFileSync(rutaAbsoluta, archivo.buffer);
 
-    return this.prisma.documento.create({
+    const documento = await this.prisma.documento.create({
       data: {
         nombre: archivo.originalname,
         mimeType: archivo.mimetype,
@@ -109,6 +115,17 @@ export class DocumentoService {
         autorId,
       },
     });
+
+    this.ragService
+      .indexar({
+        tipo: "DOCUMENTO",
+        referenciaId: documento.id,
+        usuarioId: null,
+        contenido: this.ragService.textoParaDocumento(documento),
+      })
+      .catch((err) => this.logger.error(`Error indexando documento ${documento.id}:`, err));
+
+    return documento;
   }
 
   /**
@@ -203,6 +220,9 @@ export class DocumentoService {
    */
   async eliminarDocumento(id: string): Promise<Documento> {
     const doc = await this.obtenerDocumento(id, false);
+
+    // Eliminar embeddings antes de borrar el documento
+    await this.ragService.eliminarPorReferencia(id);
 
     // Eliminar el archivo físico si existe
     const rutaAbsoluta = path.join(process.cwd(), doc.archivoPath);

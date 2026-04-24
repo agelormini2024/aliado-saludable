@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, Logger } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
+import { RagService } from "../ai/rag.service";
 import { CreateArticuloDto } from "./dto/create-articulo.dto";
 import { UpdateArticuloDto } from "./dto/update-articulo.dto";
 import { Articulo } from "@prisma/client";
@@ -29,7 +30,12 @@ export interface ArticulosResult {
  */
 @Injectable()
 export class ContenidoService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ContenidoService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   /**
    * Crea un nuevo artículo. Por defecto queda no publicado hasta que el
@@ -40,7 +46,7 @@ export class ContenidoService {
    * @returns El artículo creado
    */
   async crearArticulo(autorId: string, dto: CreateArticuloDto): Promise<Articulo> {
-    return this.prisma.articulo.create({
+    const articulo = await this.prisma.articulo.create({
       data: {
         titulo: dto.titulo,
         contenido: dto.contenido,
@@ -49,6 +55,17 @@ export class ContenidoService {
         autorId,
       },
     });
+
+    this.ragService
+      .indexar({
+        tipo: "ARTICULO",
+        referenciaId: articulo.id,
+        usuarioId: null,
+        contenido: this.ragService.textoParaArticulo(articulo),
+      })
+      .catch((err) => this.logger.error(`Error indexando artículo ${articulo.id}:`, err));
+
+    return articulo;
   }
 
   /**
@@ -129,7 +146,7 @@ export class ContenidoService {
     // Verificar existencia antes de intentar la actualización (admin ve no publicados también)
     await this.obtenerArticulo(id, false);
 
-    return this.prisma.articulo.update({
+    const articulo = await this.prisma.articulo.update({
       where: { id },
       data: {
         ...(dto.titulo !== undefined ? { titulo: dto.titulo } : {}),
@@ -138,6 +155,20 @@ export class ContenidoService {
         ...(dto.publicado !== undefined ? { publicado: dto.publicado } : {}),
       },
     });
+
+    // Re-indexar si cambió el contenido o el título
+    if (dto.titulo !== undefined || dto.contenido !== undefined) {
+      this.ragService
+        .indexar({
+          tipo: "ARTICULO",
+          referenciaId: articulo.id,
+          usuarioId: null,
+          contenido: this.ragService.textoParaArticulo(articulo),
+        })
+        .catch((err) => this.logger.error(`Error re-indexando artículo ${articulo.id}:`, err));
+    }
+
+    return articulo;
   }
 
   /**
@@ -150,6 +181,9 @@ export class ContenidoService {
    */
   async eliminarArticulo(id: string): Promise<Articulo> {
     await this.obtenerArticulo(id, false);
+
+    // Eliminar embeddings antes de eliminar el artículo (no hay FK pero es más limpio)
+    await this.ragService.eliminarPorReferencia(id);
 
     return this.prisma.articulo.delete({ where: { id } });
   }

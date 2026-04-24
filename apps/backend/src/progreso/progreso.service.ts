@@ -1,5 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
+import { RagService } from "../ai/rag.service";
 import { CreatePesoDto } from "./dto/create-peso.dto";
 import { CreateMedidasDto } from "./dto/create-medidas.dto";
 import { CreateActividadDto } from "./dto/create-actividad.dto";
@@ -34,7 +35,12 @@ export interface ResumenCalorias {
  */
 @Injectable()
 export class ProgresoService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(ProgresoService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   // ─── PESO ────────────────────────────────────────────────────────────────────
 
@@ -46,7 +52,7 @@ export class ProgresoService {
    * @returns El registro creado
    */
   async crearPeso(usuarioId: string, dto: CreatePesoDto): Promise<RegistroPeso> {
-    return this.prisma.registroPeso.create({
+    const registro = await this.prisma.registroPeso.create({
       data: {
         usuarioId,
         peso: dto.peso,
@@ -54,6 +60,18 @@ export class ProgresoService {
         nota: dto.nota,
       },
     });
+
+    // Indexar en RAG de forma asíncrona — un error de OpenAI no debe bloquear al usuario
+    this.ragService
+      .indexar({
+        tipo: "PESO",
+        referenciaId: registro.id,
+        usuarioId,
+        contenido: this.ragService.textoParaPeso(registro),
+      })
+      .catch((err) => this.logger.error(`Error indexando peso ${registro.id}:`, err));
+
+    return registro;
   }
 
   /**
@@ -97,7 +115,7 @@ export class ProgresoService {
    * @returns El registro creado
    */
   async crearMedidas(usuarioId: string, dto: CreateMedidasDto): Promise<RegistroMedidas> {
-    return this.prisma.registroMedidas.create({
+    const registro = await this.prisma.registroMedidas.create({
       data: {
         usuarioId,
         cintura: dto.cintura,
@@ -108,6 +126,17 @@ export class ProgresoService {
         fecha: dto.fecha ? new Date(dto.fecha) : new Date(),
       },
     });
+
+    this.ragService
+      .indexar({
+        tipo: "MEDIDAS",
+        referenciaId: registro.id,
+        usuarioId,
+        contenido: this.ragService.textoParaMedidas(registro),
+      })
+      .catch((err) => this.logger.error(`Error indexando medidas ${registro.id}:`, err));
+
+    return registro;
   }
 
   /**
@@ -151,7 +180,7 @@ export class ProgresoService {
    * @returns El registro creado
    */
   async crearActividad(usuarioId: string, dto: CreateActividadDto): Promise<RegistroActividad> {
-    return this.prisma.registroActividad.create({
+    const registro = await this.prisma.registroActividad.create({
       data: {
         usuarioId,
         tipo: dto.tipo,
@@ -161,6 +190,17 @@ export class ProgresoService {
         nota: dto.nota,
       },
     });
+
+    this.ragService
+      .indexar({
+        tipo: "ACTIVIDAD",
+        referenciaId: registro.id,
+        usuarioId,
+        contenido: this.ragService.textoParaActividad(registro),
+      })
+      .catch((err) => this.logger.error(`Error indexando actividad ${registro.id}:`, err));
+
+    return registro;
   }
 
   /**

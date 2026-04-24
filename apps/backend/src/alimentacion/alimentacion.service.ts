@@ -1,5 +1,6 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service";
+import { RagService } from "../ai/rag.service";
 import { CreateComidaDto } from "./dto/create-comida.dto";
 import { RegistroComida } from "@prisma/client";
 
@@ -11,7 +12,12 @@ import { RegistroComida } from "@prisma/client";
  */
 @Injectable()
 export class AlimentacionService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AlimentacionService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ragService: RagService,
+  ) {}
 
   /**
    * Registra una ingesta del usuario.
@@ -21,7 +27,7 @@ export class AlimentacionService {
    * @returns El registro creado
    */
   async crearComida(usuarioId: string, dto: CreateComidaDto): Promise<RegistroComida> {
-    return this.prisma.registroComida.create({
+    const registro = await this.prisma.registroComida.create({
       data: {
         usuarioId,
         momento: dto.momento,
@@ -30,6 +36,17 @@ export class AlimentacionService {
         fecha: dto.fecha ? new Date(dto.fecha) : new Date(),
       },
     });
+
+    this.ragService
+      .indexar({
+        tipo: "COMIDA",
+        referenciaId: registro.id,
+        usuarioId,
+        contenido: this.ragService.textoParaComida(registro),
+      })
+      .catch((err) => this.logger.error(`Error indexando comida ${registro.id}:`, err));
+
+    return registro;
   }
 
   /**

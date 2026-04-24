@@ -8,6 +8,7 @@ import { UsuariosModule } from "./usuarios/usuarios.module";
 import { ProgresoModule } from "./progreso/progreso.module";
 import { AlimentacionModule } from "./alimentacion/alimentacion.module";
 import { ContenidoModule } from "./contenido/contenido.module";
+import { AiModule } from "./ai/ai.module";
 
 /**
  * AppModule — módulo raíz de la aplicación
@@ -18,6 +19,7 @@ import { ContenidoModule } from "./contenido/contenido.module";
  * 3. AuthModule    → autenticación y autorización
  * 4. UsuariosModule, ProgresoModule, AlimentacionModule → funcionalidad de negocio
  * 5. ContenidoModule → artículos informativos (Fase 3)
+ * 6. AiModule → RAG y chat IA (Fase 3)
  */
 @Module({
   imports: [
@@ -36,6 +38,7 @@ import { ContenidoModule } from "./contenido/contenido.module";
     ProgresoModule,
     AlimentacionModule,
     ContenidoModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

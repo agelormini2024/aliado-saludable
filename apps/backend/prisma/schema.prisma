@@ -212,13 +212,50 @@ model Documento {
 }
 
 // =============================================================================
-// NOTA: EmbeddingDocument se agrega en Fase 3 (RAG + Chat IA).
+// Model: EmbeddingDocument
 //
-// Requiere la extensión pgvector instalada en PostgreSQL y una migración
-// separada que primero ejecute: CREATE EXTENSION IF NOT EXISTS vector;
+// Almacena fragmentos de texto junto con su embedding vectorial (1536 dims).
+// Usado por el sistema RAG del chat IA para recuperar contexto relevante.
 //
-// Se omite aquí para que la migración inicial pueda ejecutarse sin pgvector.
+// Tipos de contenido indexado:
+//   - "PESO"       → registros de peso del usuario
+//   - "MEDIDAS"    → registros de medidas corporales
+//   - "ACTIVIDAD"  → registros de actividad física
+//   - "COMIDA"     → registros de comidas
+//   - "ARTICULO"   → artículos editoriales (global, sin usuarioId)
+//   - "DOCUMENTO"  → documentos PDF/.docx subidos por el Admin (global)
+//
+// usuarioId es null para contenido global (artículos y documentos),
+// y contiene el ID del usuario para su historial personal.
+//
+// El campo `embedding` usa el tipo nativo de pgvector (vector de 1536 dims,
+// que corresponde a text-embedding-3-small de OpenAI).
+// Prisma lo trata como Unsupported — se manipula via $queryRaw o $executeRaw.
 // =============================================================================
+model EmbeddingDocument {
+  id           String   @id @default(cuid())
+
+  // Tipo de contenido indexado — determina cómo interpretar referenciaId
+  tipo         String
+
+  // ID del registro original (RegistroPeso, Articulo, Documento, etc.)
+  referenciaId String
+
+  // null para contenido global (artículos, documentos)
+  usuarioId    String?
+
+  // Texto plano que se indexó — útil para debug y para mostrar snippets
+  contenido    String
+
+  // Vector de 1536 dimensiones generado por text-embedding-3-small
+  // Unsupported porque Prisma no tiene soporte nativo para el tipo vector de pgvector
+  embedding    Unsupported("vector(1536)")?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tipo, usuarioId])
+}
 
 // =============================================================================
 // Model: RefreshToken
