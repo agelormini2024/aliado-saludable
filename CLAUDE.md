@@ -88,6 +88,15 @@ Igual que EUCAR v2. Los editores no resuelven nombres de paquete de workspaces.
 **D9: Calorías requeridas en actividad y comidas**
 `calorias` es `NOT NULL` en `RegistroActividad` y `RegistroComida`. El campo es obligatorio en los formularios y en los DTOs del backend. La razón es que el balance calórico diario (consumidas vs. quemadas) es una feature central del dashboard y del contexto RAG del chat IA — sin datos consistentes, la feature no funciona. No volver a hacerlo opcional.
 
+**D11: pgvector con Prisma — campo Unsupported + raw queries**
+El tipo `vector(1536)` no es soportado nativamente por Prisma. Se declara como `Unsupported("vector(1536)")` en el schema. Toda escritura del vector se hace via `$executeRaw` (UPDATE SET embedding = $1::vector). Toda lectura con `<=>` se hace via `$queryRaw`. El cuid lo genera `prisma.embeddingDocument.create()` y luego se actualiza el vector con un segundo `$executeRaw`.
+
+**D12: RAG con fire-and-forget — indexación nunca bloquea al usuario**
+El método `ragService.indexar()` se llama sin `await` en todos los servicios que escriben datos. Los errores de OpenAI (cuota, red, etc.) se loguean via `.catch(err => this.logger.error(...))` pero no se propagan. Un fallo de indexación nunca causa un 500 en la operación del usuario.
+
+**D13: Historial del chat en localStorage (no en el backend)**
+El historial visible en `/chat` es estado local del componente, persistido en `localStorage` bajo la clave `"aliado-chat-history"`. Límite: 100 mensajes. Cada request al backend es independiente — el contexto del asistente viene del RAG, no del historial de la UI. El campo `timestamp` se serializa como string ISO y se revive con `new Date()` al cargar.
+
 **D10: Documentos PDF/.docx como fuente RAG junto a los artículos**
 El Admin puede subir documentos en `POST /contenido/documentos` (multipart/form-data). El texto se extrae en el servidor con `pdf-parse` (PDF) y `mammoth` (DOCX) y se guarda en `Documento.contenido`. Los archivos físicos se guardan en `uploads/documentos/`. En Fase 5 (deploy) se migra a Supabase Storage cambiando solo el servicio de storage. En RAG se indexan con `tipo = "DOCUMENTO"` igual que los artículos.
 
@@ -154,6 +163,7 @@ backend/
 - **Calorías obligatorias**: `calorias` requerido en actividad y comidas (ver D9) — formularios con error explícito, sin valor opcional
 - **Balance calórico**: `GET /progreso/resumen-calorias?fecha=YYYY-MM-DD` → `{ data: { consumidas, quemadas, balance } }`. Hook `useResumenCalorias(fecha?)`. Se invalida con `queryKey: ["resumen-calorias"]` al guardar comida o actividad.
 - **Timezone**: nunca usar `new Date().toISOString().split("T")[0]` para obtener "hoy" — devuelve fecha UTC. Usar `todayLocal()` de `lib/date.ts` que usa `getFullYear/getMonth/getDate` (hora local). Aplica en hooks `useResumenCalorias`, `useComidasDelDia` y en los `getTodayISO()` de los formularios de progreso, actividad y alimentación.
+- **Chat localStorage**: historial de mensajes en `localStorage["aliado-chat-history"]` (límite 100). `leerHistorial()` como lazy initializer de `useState`. `Date` se serializa como string ISO y se revive al cargar. Botón "Nueva conversación" limpia estado + storage.
 - **PesoChart label**: el último punto del gráfico muestra una tarjeta SVG (`UltimoLabel`) siempre visible con el peso actual. Requiere `isFinite(cx) && isFinite(cy)` como guard porque Recharts pasa `NaN` en el primer render. El margen superior del chart es `top: 56` para que la tarjeta no se corte.
 - **DateNavigator (alimentación)**: cuando es hoy muestra "Hoy · 22 abr." (no solo "Hoy") para que siempre sea visible la fecha real.
 
@@ -186,7 +196,7 @@ frontend/
 │   │   ├── Sidebar.tsx          # bg-forest, rounded-r-3xl, overlay mobile, amber active bar
 │   │   ├── MobileHeader.tsx     # lg:hidden, hamburger, logo, avatar inicial
 │   │   └── PesoChart.tsx        # Recharts AreaChart — importar con dynamic({ ssr: false })
-│   └── chat/                    # ChatInterface, MessageBubble (Fase 3)
+│   └── chat/                    # (no hay componentes separados — todo en la page)
 ├── lib/
 │   ├── api.ts                   # Axios con baseURL NEXT_PUBLIC_API_URL, interceptor Bearer
 │   └── date.ts                  # todayLocal() — fecha local YYYY-MM-DD (no usar toISOString)
@@ -194,7 +204,7 @@ frontend/
 │   ├── useProgreso.ts           # usePesos, useMedidas, useActividad, useResumenCalorias
 │   ├── useAlimentacion.ts       # useComidasDelDia(fecha?)
 │   ├── useContenido.ts          # useArticulos, useArticulo, useDocumentos (Fase 3 T5)
-│   └── useChat.ts               # (Fase 3 T6)
+│   └── useChat.ts               # useChatMutation → POST /ai/chat; interfaz ChatMessage
 └── stores/                      # Zustand — SOLO UI state
     ├── auth.store.ts            # persist en localStorage ("aliado-auth"), AuthUsuario
     └── ui.store.ts              # sidebarOpen
@@ -423,14 +433,14 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, calorías requeridas, navegador de fechas (prev/next), vista del día agrupada por momento
 - [x] **Balance calórico** — `calorias` NOT NULL en schema, endpoint `GET /progreso/resumen-calorias`, tarjeta "Balance de hoy" en dashboard (consumidas / quemadas / neto)
 
-### Fase 3 — Contenido + Chat IA 🔄
+### Fase 3 — Contenido + Chat IA ✅
 - [x] **T1: Backend módulo de artículos** — CRUD completo, RBAC (ADMIN escribe, USUARIO lee), paginación + filtro por categoría, Swagger decorado
 - [x] **T1b: Documentos PDF/.docx** — upload multipart, extracción de texto (pdf-parse 1.1.1 / mammoth), almacenamiento en disco, descarga del original; modelo `Documento` en schema
+- [x] **T2: pgvector** — compilado desde fuente (v0.8.0, macOS 13), extension habilitada, modelo `EmbeddingDocument` con `embedding Unsupported("vector(1536)")`, migración aplicada
+- [x] **T3: RAG** — `RagService` con indexación fire-and-forget en Progreso, Alimentacion, Contenido y Documento; búsqueda vectorial con operador `<=>` via `$queryRaw`
+- [x] **T4: Chat IA backend** — `POST /ai/chat` (JwtAuthGuard), RAG + GPT-4o-mini, system prompt en español rioplatense, sin streaming en MVP
 - [x] **T5: Frontend sección `/contenido`** — artículos con filtro por categoría + CRUD admin (crear/editar/eliminar via modal RHF+Zod); documentos con descarga blob autenticada + CRUD admin (upload fetch nativo, toggle publicado, eliminar); hooks `useArticulos`, `useArticulo`, `useDocumentos`; detalle de artículo en `/contenido/[id]` con markdown básico
-- [ ] T2: pgvector: compilar desde fuente en macOS 13, migración + EmbeddingDocument
-- [ ] T3: RAG: indexación de registros del usuario + artículos + documentos
-- [ ] T4: Chat IA backend (POST /ai/chat, sin streaming en MVP)
-- [ ] T6: Frontend: interfaz de chat (`/chat`)
+- [x] **T6: Frontend chat `/chat`** — interfaz de mensajería completa; historial persistido en localStorage (`"aliado-chat-history"`, límite 100 msgs); burbujas usuario/asistente; indicador de escritura; sugerencias en estado vacío; botón "Nueva conversación"
 
 ### Fase 4 — Panel Coach ⬜
 - [ ] Backend: módulo coaches, asignación de pacientes
