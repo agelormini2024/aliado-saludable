@@ -1,20 +1,21 @@
 import { Module } from "@nestjs/common";
 import { RagService } from "./rag.service";
+import { ChatService } from "./chat.service";
+import { ChatController } from "./chat.controller";
 
 /**
  * AiModule — módulo de inteligencia artificial del backend.
  *
- * Agrupa los servicios de IA que son reutilizados por otros módulos:
- * - RagService: indexación y búsqueda vectorial (RAG)
- *
- * Se importa en ProgresoModule, AlimentacionModule y ContenidoModule
- * para que sus servicios puedan llamar a RagService.indexar()
- * después de guardar cada registro.
- *
- * En Fase 4 (Chat IA), se agrega ChatService a este módulo.
+ * Contiene:
+ * - RagService: indexación y búsqueda vectorial (RAG). Se exporta para que
+ *   ProgresoModule, AlimentacionModule y ContenidoModule puedan indexar
+ *   sus registros al crearlos.
+ * - ChatService: orquesta RAG + GPT-4o-mini para el chat del usuario.
+ * - ChatController: expone POST /ai/chat.
  */
 @Module({
-  providers: [RagService],
+  controllers: [ChatController],
+  providers: [RagService, ChatService],
   exports: [RagService],
 })
 export class AiModule {}
