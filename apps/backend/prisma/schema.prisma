@@ -39,6 +39,12 @@ enum RolUsuario {
 // Representa a una persona registrada en la plataforma.
 // Puede tener un Coach asignado (relación opcional).
 // Todos los registros de progreso y alimentación pertenecen a un Usuario.
+//
+// Relaciones con Coach:
+//   - coachId / coach           → el paciente apunta al Coach que lo atiende
+//   - coachProfileId / coachProfile → si rol=COACH, apunta al perfil Coach del propio usuario
+//     Esto permite que un coach (Usuario con rol=COACH) encuentre sus pacientes:
+//     usuario.coachProfile.pacientes
 // =============================================================================
 model Usuario {
   id              String    @id @default(cuid())
@@ -48,9 +54,14 @@ model Usuario {
   passwordHash    String
   rol             RolUsuario @default(USUARIO)
 
-  // Relación opcional con un Coach asignado
+  // El paciente apunta al Coach que lo atiende (puede no tener coach asignado)
   coachId         String?
-  coach           Coach?    @relation(fields: [coachId], references: [id])
+  coach           Coach?    @relation("PacienteDeCoach", fields: [coachId], references: [id])
+
+  // Si este Usuario tiene rol=COACH, apunta a su propio perfil de Coach
+  // Permite navegar: usuarioCoach.coachProfile.pacientes
+  coachProfileId  String?   @unique
+  coachProfile    Coach?    @relation("PerfilDelCoach", fields: [coachProfileId], references: [id])
 
   // Datos de perfil opcionales (se completan después del registro)
   altura          Float?    // en centímetros
@@ -73,9 +84,13 @@ model Usuario {
 // =============================================================================
 // Model: Coach
 //
-// Representa a un profesional de salud (nutricionista, entrenador).
-// Puede tener múltiples pacientes (Usuarios) asignados.
-// Tiene su propio flujo de autenticación separado del Usuario.
+// Perfil profesional del coach (nutricionista, entrenador).
+// Los coaches se autentican como Usuario con rol=COACH.
+// Este modelo almacena datos profesionales y las relaciones con sus pacientes.
+//
+// Relaciones con Usuario:
+//   - pacientes (PacienteDeCoach) → lista de Usuarios atendidos por este Coach
+//   - usuarioCoach (PerfilDelCoach) → el Usuario con rol=COACH dueño de este perfil
 // =============================================================================
 model Coach {
   id           String  @id @default(cuid())
@@ -85,10 +100,13 @@ model Coach {
   passwordHash String
   especialidad String?
 
-  // Pacientes asignados a este coach
-  pacientes Usuario[]
+  // Usuarios atendidos por este coach
+  pacientes    Usuario[] @relation("PacienteDeCoach")
 
-  // Refresh tokens activos del coach
+  // El Usuario con rol=COACH que tiene este perfil profesional (relación 1-a-1)
+  usuarioCoach Usuario?  @relation("PerfilDelCoach")
+
+  // Refresh tokens activos del coach (conservado para posible auth separado futuro)
   refreshTokens RefreshToken[]
 
   createdAt DateTime @default(now())

@@ -9,6 +9,8 @@ import { ProgresoModule } from "./progreso/progreso.module";
 import { AlimentacionModule } from "./alimentacion/alimentacion.module";
 import { ContenidoModule } from "./contenido/contenido.module";
 import { AiModule } from "./ai/ai.module";
+import { CoachesModule } from "./coaches/coaches.module";
+import { AdminModule } from "./admin/admin.module";
 
 /**
  * AppModule — módulo raíz de la aplicación
@@ -20,6 +22,7 @@ import { AiModule } from "./ai/ai.module";
  * 4. UsuariosModule, ProgresoModule, AlimentacionModule → funcionalidad de negocio
  * 5. ContenidoModule → artículos informativos (Fase 3)
  * 6. AiModule → RAG y chat IA (Fase 3)
+ * 7. CoachesModule → panel de gestión de pacientes para coaches (Fase 4)
  */
 @Module({
   imports: [
@@ -39,6 +42,8 @@ import { AiModule } from "./ai/ai.module";
     AlimentacionModule,
     ContenidoModule,
     AiModule,
+    CoachesModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],
