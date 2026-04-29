@@ -129,6 +129,20 @@ export function CoachSidebar() {
           })}
         </nav>
 
+        {/* Link de vuelta al dashboard personal */}
+        <div className="border-t border-white/10 px-3 py-3">
+          <Link
+            href="/dashboard"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-cream/40 transition-all hover:bg-white/5 hover:text-cream/70"
+          >
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            Mi Dashboard
+          </Link>
+        </div>
+
         {/* Sección del usuario */}
         <div className="border-t border-white/10 px-4 py-5">
           {usuario && (

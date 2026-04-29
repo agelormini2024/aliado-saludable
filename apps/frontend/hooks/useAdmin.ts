@@ -163,13 +163,14 @@ export function useAsignarCoach() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-pacientes"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-coaches"] });
     },
   });
 }
 
 /**
  * Desasigna el coach de un paciente (establece coachId = null).
- * Invalida el cache de pacientes al tener éxito.
+ * Invalida tanto pacientes como coaches para refrescar el _count.pacientes en las tarjetas.
  */
 export function useDesasignarCoach() {
   const queryClient = useQueryClient();
@@ -180,6 +181,7 @@ export function useDesasignarCoach() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-pacientes"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-coaches"] });
     },
   });
 }

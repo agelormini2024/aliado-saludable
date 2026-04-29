@@ -94,6 +94,16 @@ El tipo `vector(1536)` no es soportado nativamente por Prisma. Se declara como `
 **D12: RAG con fire-and-forget — indexación nunca bloquea al usuario**
 El método `ragService.indexar()` se llama sin `await` en todos los servicios que escriben datos. Los errores de OpenAI (cuota, red, etc.) se loguean via `.catch(err => this.logger.error(...))` pero no se propagan. Un fallo de indexación nunca causa un 500 en la operación del usuario.
 
+**D14: Route group `(coach)` requiere subcarpeta `coach/` para el segmento de URL**
+Las páginas del panel coach van en `app/(coach)/coach/pacientes/...`, no en `app/(coach)/pacientes/...`.
+El route group `(coach)` es invisible en la URL — solo aporta el layout. La carpeta `coach/` dentro de él es la que genera el prefijo `/coach` en la URL. Mismo patrón que `(dashboard)` donde las páginas están en `(dashboard)/dashboard/`, `(dashboard)/progreso/`, etc.
+
+**D15: Invalidación cruzada de cache en asignarCoach / desasignarCoach**
+`useAsignarCoach` y `useDesasignarCoach` invalidan tanto `["admin-pacientes"]` como `["admin-coaches"]` en `onSuccess`. Sin esto, el `_count.pacientes` de las tarjetas de coaches no se actualiza al asignar/desasignar desde `/admin/pacientes`.
+
+**D16: Coaches acceden a su panel desde el Sidebar del dashboard**
+El `Sidebar.tsx` del área autenticada (`(dashboard)`) muestra una sección "Coach" con link a `/coach/pacientes` cuando `usuario.rol === "COACH"`. No se redirige al coach automáticamente al loguear — puede usar el dashboard de usuario (su propio progreso) y el panel coach desde el mismo sidebar.
+
 **D13: Historial del chat en localStorage (no en el backend)**
 El historial visible en `/chat` es estado local del componente, persistido en `localStorage` bajo la clave `"aliado-chat-history"`. Límite: 100 mensajes. Cada request al backend es independiente — el contexto del asistente viene del RAG, no del historial de la UI. El campo `timestamp` se serializa como string ISO y se revive con `new Date()` al cargar.
 
@@ -187,15 +197,21 @@ frontend/
 │   │   ├── contenido/           # Artículos y guías (Fase 3)
 │   │   └── perfil/              # Datos del usuario + metas (Fase 3+)
 │   └── (coach)/                 # Panel exclusivo para coaches (Fase 4)
-│       ├── layout.tsx
-│       ├── pacientes/
-│       └── pacientes/[id]/
+│       ├── layout.tsx           # Auth guard doble: sin token → /login; rol≠COACH → /dashboard
+│       └── coach/               # Segmento de URL "coach" (la carpeta (coach) es invisible en la URL)
+│           └── pacientes/
+│               ├── page.tsx     # Lista de pacientes del coach → /coach/pacientes
+│               └── [id]/
+│                   ├── page.tsx            # Detalle de paciente → /coach/pacientes/[id]
+│                   └── _PesoChartCoach.tsx # Recharts sin SSR (componente privado de la ruta)
 ├── components/
 │   ├── providers.tsx            # QueryClientProvider + ReactQueryDevtools
 │   ├── dashboard/
-│   │   ├── Sidebar.tsx          # bg-forest, rounded-r-3xl, overlay mobile, amber active bar
+│   │   ├── Sidebar.tsx          # bg-forest, rounded-r-3xl; sección "Coach" para COACH, sección "Admin" para ADMIN
 │   │   ├── MobileHeader.tsx     # lg:hidden, hamburger, logo, avatar inicial
 │   │   └── PesoChart.tsx        # Recharts AreaChart — importar con dynamic({ ssr: false })
+│   ├── coach/
+│   │   └── CoachSidebar.tsx     # bg-forest, badge "Panel Coach", nav: "Mis Pacientes", link "← Mi Dashboard"
 │   └── chat/                    # (no hay componentes separados — todo en la page)
 ├── lib/
 │   ├── api.ts                   # Axios con baseURL NEXT_PUBLIC_API_URL, interceptor Bearer
@@ -204,7 +220,9 @@ frontend/
 │   ├── useProgreso.ts           # usePesos, useMedidas, useActividad, useResumenCalorias
 │   ├── useAlimentacion.ts       # useComidasDelDia(fecha?)
 │   ├── useContenido.ts          # useArticulos, useArticulo, useDocumentos (Fase 3 T5)
-│   └── useChat.ts               # useChatMutation → POST /ai/chat; interfaz ChatMessage
+│   ├── useChat.ts               # useChatMutation → POST /ai/chat; interfaz ChatMessage
+│   ├── useAdmin.ts              # useCoaches, usePacientes, useCrearCoach, useEditarCoach, useConvertirAPaciente, useAsignarCoach, useDesasignarCoach
+│   └── useCoach.ts              # useMisPacientes, useResumenPaciente
 └── stores/                      # Zustand — SOLO UI state
     ├── auth.store.ts            # persist en localStorage ("aliado-auth"), AuthUsuario
     └── ui.store.ts              # sidebarOpen
@@ -442,10 +460,15 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] **T5: Frontend sección `/contenido`** — artículos con filtro por categoría + CRUD admin (crear/editar/eliminar via modal RHF+Zod); documentos con descarga blob autenticada + CRUD admin (upload fetch nativo, toggle publicado, eliminar); hooks `useArticulos`, `useArticulo`, `useDocumentos`; detalle de artículo en `/contenido/[id]` con markdown básico
 - [x] **T6: Frontend chat `/chat`** — interfaz de mensajería completa; historial persistido en localStorage (`"aliado-chat-history"`, límite 100 msgs); burbujas usuario/asistente; indicador de escritura; sugerencias en estado vacío; botón "Nueva conversación"
 
-### Fase 4 — Panel Coach ⬜
-- [ ] Backend: módulo coaches, asignación de pacientes
-- [ ] Frontend: panel coach con lista de pacientes y gráficos de progreso
-- [ ] Notificaciones básicas (nuevo registro del paciente)
+### Fase 4 — Panel Coach ✅ (T7 pendiente)
+- [x] **T1: Migración schema** — `coachProfileId String? @unique` en `Usuario`; relaciones nombradas `"PacienteDeCoach"` y `"PerfilDelCoach"`; migración via SQL manual + `prisma migrate resolve --applied`
+- [x] **T2: Backend CoachesModule** — `GET /coaches/mis-pacientes` (lista + último peso + actividadReciente 7 días); `GET /coaches/pacientes/:id/resumen` (últimos 10 pesos, última medida, 7 actividades, comidas hoy, balance calórico hoy). Valida que el paciente pertenezca al coach.
+- [x] **T3: Backend AdminModule** — `POST /admin/coaches` (transacción: crea Coach + Usuario rol=COACH); `GET /admin/coaches`; `PATCH /admin/coaches/:id` (edita + sincroniza al Usuario); `POST /admin/coaches/:id/convertir-a-paciente` (transacción 4 pasos); `GET /admin/pacientes`; `POST|DELETE /admin/pacientes/:id/asignar-coach`
+- [x] **T4: Frontend layout coach** — `CoachSidebar` (bg-forest, badge "Panel Coach", link "← Mi Dashboard"); `(coach)/layout.tsx` (auth guard doble); `Sidebar.tsx` del dashboard con sección "Coach" para rol=COACH y sección "Admin" para rol=ADMIN
+- [x] **T4b: Frontend panel admin** — `/admin/coaches` (drawer lateral con editar especialidad, lista pacientes del coach, zona de peligro + modal confirmación "Convertir a Paciente", modal crear coach RHF+Zod); `/admin/pacientes` (dropdown + asignar/quitar coach por fila, loading por paciente); `hooks/useAdmin.ts`
+- [x] **T5: Frontend lista de pacientes** — `/coach/pacientes`: grid de tarjetas con avatar, último peso + fecha relativa local, badge actividadReciente (verde/ámbar/rojo), botón "Ver detalle"; states: loading skeletons, error, empty; `hooks/useCoach.ts`
+- [x] **T6: Frontend detalle de paciente** — `/coach/pacientes/[id]`: cabecera con meta y altura, gráfico Recharts (AreaChart + gradiente + label último punto), medidas corporales (solo las no-null), balance calórico hoy (verde/rojo), actividad reciente con emojis, comidas de hoy; manejo 403/404 vs error genérico
+- [ ] **T7: Notificaciones básicas** — badge en la lista de pacientes indicando nuevos registros desde última visita del coach
 
 ### Fase 5 — Hardening + Deploy DEMO ⬜
 - [ ] Rate limiting + logging estructurado

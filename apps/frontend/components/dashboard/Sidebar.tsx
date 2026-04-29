@@ -69,10 +69,17 @@ const IconLogout = () => (
   </svg>
 );
 
-/** Ícono de escudo con tilde — representa el rol administrativo */
+/** Ícono de escudo con tilde — gestión de coaches */
 const IconAdmin = () => (
   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
     <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+  </svg>
+);
+
+/** Ícono de grupo de personas — gestión de pacientes */
+const IconPacientesAdmin = () => (
+  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
   </svg>
 );
 
@@ -174,31 +181,66 @@ export function Sidebar() {
             );
           })}
 
-          {/* Sección admin — visible únicamente para el rol ADMIN */}
-          {usuario?.rol === "ADMIN" && (
+          {/* Sección coach — visible únicamente para el rol COACH */}
+          {usuario?.rol === "COACH" && (
             <>
               <div className="my-2 border-t border-white/10" />
+              <p className="px-4 pb-1 pt-0.5 font-sans text-[10px] uppercase tracking-[0.15em] text-cream/25">
+                Coach
+              </p>
               <Link
-                href="/admin/coaches"
+                href="/coach/pacientes"
                 onClick={() => setSidebarOpen(false)}
                 className={`
                   flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium
                   transition-all duration-150
-                  ${
-                    pathname.startsWith("/admin")
-                      ? "bg-white/10 text-cream"
-                      : "text-cream/55 hover:bg-white/5 hover:text-cream/85"
-                  }
+                  ${pathname.startsWith("/coach") ? "bg-white/10 text-cream" : "text-cream/55 hover:bg-white/5 hover:text-cream/85"}
                 `}
               >
                 <span
-                  className={`h-5 w-1 shrink-0 rounded-full transition-all ${pathname.startsWith("/admin") ? "bg-amber" : "bg-transparent"}`}
+                  className={`h-5 w-1 shrink-0 rounded-full transition-all ${pathname.startsWith("/coach") ? "bg-amber" : "bg-transparent"}`}
                 />
                 <span className="h-5 w-5 shrink-0">
-                  <IconAdmin />
+                  <IconPacientesAdmin />
                 </span>
-                Admin
+                Mis Pacientes
               </Link>
+            </>
+          )}
+
+          {/* Sección admin — visible únicamente para el rol ADMIN */}
+          {usuario?.rol === "ADMIN" && (
+            <>
+              <div className="my-2 border-t border-white/10" />
+              <p className="px-4 pb-1 pt-0.5 font-sans text-[10px] uppercase tracking-[0.15em] text-cream/25">
+                Admin
+              </p>
+              {[
+                { label: "Coaches", href: "/admin/coaches", Icon: IconAdmin },
+                { label: "Pacientes", href: "/admin/pacientes", Icon: IconPacientesAdmin },
+              ].map(({ label, href, Icon }) => {
+                const isActive = pathname.startsWith(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`
+                      flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium
+                      transition-all duration-150
+                      ${isActive ? "bg-white/10 text-cream" : "text-cream/55 hover:bg-white/5 hover:text-cream/85"}
+                    `}
+                  >
+                    <span
+                      className={`h-5 w-1 shrink-0 rounded-full transition-all ${isActive ? "bg-amber" : "bg-transparent"}`}
+                    />
+                    <span className="h-5 w-5 shrink-0">
+                      <Icon />
+                    </span>
+                    {label}
+                  </Link>
+                );
+              })}
             </>
           )}
         </nav>
