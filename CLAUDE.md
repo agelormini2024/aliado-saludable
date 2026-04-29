@@ -104,6 +104,11 @@ El route group `(coach)` es invisible en la URL — solo aporta el layout. La ca
 **D16: Coaches acceden a su panel desde el Sidebar del dashboard**
 El `Sidebar.tsx` del área autenticada (`(dashboard)`) muestra una sección "Coach" con link a `/coach/pacientes` cuando `usuario.rol === "COACH"`. No se redirige al coach automáticamente al loguear — puede usar el dashboard de usuario (su propio progreso) y el panel coach desde el mismo sidebar.
 
+**D17: Mockear módulos Node con exports non-configurable en Jest**
+Los exports nativos del módulo `fs` (`writeFileSync`, `existsSync`, `unlinkSync`) son `configurable: false` — `jest.spyOn()` lanza `Cannot redefine property`. Solución: `jest.mock('fs', () => ({ ...jest.requireActual('fs'), writeFileSync: jest.fn(), existsSync: jest.fn(), unlinkSync: jest.fn() }))` a nivel de módulo. Las llamadas a `jest.mock()` se hoistean automáticamente al inicio del archivo por el compilador de Jest. Lo mismo aplica para dependencias cargadas con `require()` a nivel de módulo en el servicio (ej: `pdf-parse`, `mammoth`): usar `jest.mock('pdf-parse', () => jest.fn().mockResolvedValue(...))` antes de cualquier import.
+
+Tras `jest.clearAllMocks()` en `beforeEach`, las implementaciones de los mocks globales sobreviven pero los call counts se resetean. Si un mock global tiene un default sensible (ej: `existsSync` retorna `false` por defecto), reafirmarlo en `beforeEach` para que tests que lo cambien a `true` no contaminen los siguientes.
+
 **D13: Historial del chat en localStorage (no en el backend)**
 El historial visible en `/chat` es estado local del componente, persistido en `localStorage` bajo la clave `"aliado-chat-history"`. Límite: 100 mensajes. Cada request al backend es independiente — el contexto del asistente viene del RAG, no del historial de la UI. El campo `timestamp` se serializa como string ISO y se revive con `new Date()` al cargar.
 
@@ -439,7 +444,7 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Auth completo: JWT + refresh tokens + RBAC (USUARIO / COACH / ADMIN)
 - [x] Módulos: usuarios, progreso (peso + medidas + actividad), alimentación
 - [x] Swagger docs (decoradores en todos los controllers, accesible en /api/docs)
-- [x] Tests unitarios de auth (9 tests: register, validarCredenciales, refresh, logout)
+- [x] Tests unitarios de auth — `auth.service.spec.ts`: 9 tests (register, validarCredenciales, refresh, logout)
 - [x] bcryptjs en lugar de bcrypt (evita dependencia de binding nativo no compilable)
 
 ### Fase 2 — Dashboard + Progreso ✅
@@ -450,6 +455,7 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] Registro de actividad física — `/actividad`, selector visual de tipo (5 botones), calorías requeridas, historial con badges por tipo
 - [x] Registro de comidas — `/alimentacion`, selector de momento, textarea libre, calorías requeridas, navegador de fechas (prev/next), vista del día agrupada por momento
 - [x] **Balance calórico** — `calorias` NOT NULL en schema, endpoint `GET /progreso/resumen-calorias`, tarjeta "Balance de hoy" en dashboard (consumidas / quemadas / neto)
+- [x] Tests unitarios de progreso y alimentación — `progreso.service.spec.ts`: 14 tests (crearPeso/Medidas/Actividad con RAG fire-and-forget, listarX con paginación, resumenCalorias null→0/déficit/rango 24hs); `alimentacion.service.spec.ts`: 8 tests (crearComida con fecha/RAG/usuarioId, listarComidasDelDia con rango 24hs y orden asc)
 
 ### Fase 3 — Contenido + Chat IA ✅
 - [x] **T1: Backend módulo de artículos** — CRUD completo, RBAC (ADMIN escribe, USUARIO lee), paginación + filtro por categoría, Swagger decorado
@@ -459,8 +465,9 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] **T4: Chat IA backend** — `POST /ai/chat` (JwtAuthGuard), RAG + GPT-4o-mini, system prompt en español rioplatense, sin streaming en MVP
 - [x] **T5: Frontend sección `/contenido`** — artículos con filtro por categoría + CRUD admin (crear/editar/eliminar via modal RHF+Zod); documentos con descarga blob autenticada + CRUD admin (upload fetch nativo, toggle publicado, eliminar); hooks `useArticulos`, `useArticulo`, `useDocumentos`; detalle de artículo en `/contenido/[id]` con markdown básico
 - [x] **T6: Frontend chat `/chat`** — interfaz de mensajería completa; historial persistido en localStorage (`"aliado-chat-history"`, límite 100 msgs); burbujas usuario/asistente; indicador de escritura; sugerencias en estado vacío; botón "Nueva conversación"
+- [x] Tests unitarios de contenido — `contenido.service.spec.ts`: 21 tests (crearArticulo con RAG/autorId/publicado default, listarArticulos con soloPublicados/categoría/paginación, obtenerArticulo con 404/borrador, actualizarArticulo con re-indexación RAG solo si cambia texto, eliminarArticulo con RAG antes de delete); `documento.service.spec.ts`: 21 tests (crearDocumento con extracción pdf-parse/mammoth mockeados, writeFileSync mockeado via `jest.mock('fs')`, RAG fire-and-forget, MIME inválido; listarDocumentos; actualizarDocumento; eliminarDocumento con unlinkSync condicional y RAG antes de delete)
 
-### Fase 4 — Panel Coach ✅ (T7 pendiente)
+### Fase 4 — Panel Coach ✅ (T7 descartada)
 - [x] **T1: Migración schema** — `coachProfileId String? @unique` en `Usuario`; relaciones nombradas `"PacienteDeCoach"` y `"PerfilDelCoach"`; migración via SQL manual + `prisma migrate resolve --applied`
 - [x] **T2: Backend CoachesModule** — `GET /coaches/mis-pacientes` (lista + último peso + actividadReciente 7 días); `GET /coaches/pacientes/:id/resumen` (últimos 10 pesos, última medida, 7 actividades, comidas hoy, balance calórico hoy). Valida que el paciente pertenezca al coach.
 - [x] **T3: Backend AdminModule** — `POST /admin/coaches` (transacción: crea Coach + Usuario rol=COACH); `GET /admin/coaches`; `PATCH /admin/coaches/:id` (edita + sincroniza al Usuario); `POST /admin/coaches/:id/convertir-a-paciente` (transacción 4 pasos); `GET /admin/pacientes`; `POST|DELETE /admin/pacientes/:id/asignar-coach`
@@ -468,11 +475,28 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 - [x] **T4b: Frontend panel admin** — `/admin/coaches` (drawer lateral con editar especialidad, lista pacientes del coach, zona de peligro + modal confirmación "Convertir a Paciente", modal crear coach RHF+Zod); `/admin/pacientes` (dropdown + asignar/quitar coach por fila, loading por paciente); `hooks/useAdmin.ts`
 - [x] **T5: Frontend lista de pacientes** — `/coach/pacientes`: grid de tarjetas con avatar, último peso + fecha relativa local, badge actividadReciente (verde/ámbar/rojo), botón "Ver detalle"; states: loading skeletons, error, empty; `hooks/useCoach.ts`
 - [x] **T6: Frontend detalle de paciente** — `/coach/pacientes/[id]`: cabecera con meta y altura, gráfico Recharts (AreaChart + gradiente + label último punto), medidas corporales (solo las no-null), balance calórico hoy (verde/rojo), actividad reciente con emojis, comidas de hoy; manejo 403/404 vs error genérico
-- [ ] **T7: Notificaciones básicas** — badge en la lista de pacientes indicando nuevos registros desde última visita del coach
+- [x] Tests unitarios de coaches y admin — `coaches.service.spec.ts`: 8 tests (misPacientes sin perfil/sin pacientes/con actividad, resumenPaciente forbidden/sin passwordHash/balance calórico); `admin.service.spec.ts`: 15 tests (crearCoach conflicto email/transacción/hash password, listarCoaches sin passwordHash, editarCoach sincroniza Usuario, convertirAPaciente transacción 4 pasos, asignarCoach/desasignarCoach)
+- [ ] **T7: Notificaciones básicas** — descartada para el MVP (no agrega valor para la demo de Workana)
+
+### Tests Unitarios — Estado Final (pre-Fase 5)
+**107 tests, 8 suites, todos pasando.** Cobertura de todos los servicios de negocio relevantes para la demo:
+
+| Suite | Tests |
+|---|---|
+| `auth/auth.service.spec.ts` | 9 |
+| `coaches/coaches.service.spec.ts` | 8 |
+| `admin/admin.service.spec.ts` | 15 |
+| `progreso/progreso.service.spec.ts` | 14 |
+| `alimentacion/alimentacion.service.spec.ts` | 8 |
+| `contenido/contenido.service.spec.ts` | 21 |
+| `contenido/documento.service.spec.ts` | 21 |
+| `app.controller.spec.ts` | 1 |
+
+Pendiente menor: `usuarios/usuarios.service.spec.ts` (CRUD de perfil — no bloqueante para demo). Frontend sin tests (no bloqueante).
 
 ### Fase 5 — Hardening + Deploy DEMO ⬜
 - [ ] Rate limiting + logging estructurado
-- [ ] Tests E2E básicos
+- [ ] Tests E2E básicos (los unitarios ya están completos — 107 tests)
 - [ ] Deploy: Supabase + Render + Vercel
 - [ ] Demo lista para presentar en Workana
 
