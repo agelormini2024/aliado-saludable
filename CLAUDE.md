@@ -112,6 +112,12 @@ Tras `jest.clearAllMocks()` en `beforeEach`, las implementaciones de los mocks g
 **D13: Historial del chat en localStorage (no en el backend)**
 El historial visible en `/chat` es estado local del componente, persistido en `localStorage` bajo la clave `"aliado-chat-history"`. Límite: 100 mensajes. Cada request al backend es independiente — el contexto del asistente viene del RAG, no del historial de la UI. El campo `timestamp` se serializa como string ISO y se revive con `new Date()` al cargar.
 
+**D18: Rate limiting sin Redis — store en memoria, dos perfiles**
+`ThrottlerModule.forRoot()` con dos perfiles: `default` (100 req / 60s) para toda la API y `auth` (5 req / 60s) para los endpoints de autenticación. El guard se registra globalmente como `APP_GUARD`. Sin Redis (D6): el store en memoria es suficiente para el MVP — las cuentas se reinician al reiniciar el proceso. Los endpoints que no deben limitarse usan `@SkipThrottle()`.
+
+**D19: Logging estructurado con nestjs-pino**
+`nestjs-pino` reemplaza el Logger nativo de NestJS. `app.useLogger(app.get(PinoLogger))` con `bufferLogs: true` en `NestFactory.create()` para capturar logs del framework antes de que Pino esté listo. Dev: `pino-pretty` (singleLine, colorize, translateTime). Prod: JSON puro por stdout. Los `this.logger.log/error/warn()` existentes en todos los servicios no requieren cambio alguno.
+
 **D10: Documentos PDF/.docx como fuente RAG junto a los artículos**
 El Admin puede subir documentos en `POST /contenido/documentos` (multipart/form-data). El texto se extrae en el servidor con `pdf-parse` (PDF) y `mammoth` (DOCX) y se guarda en `Documento.contenido`. Los archivos físicos se guardan en `uploads/documentos/`. En Fase 5 (deploy) se migra a Supabase Storage cambiando solo el servicio de storage. En RAG se indexan con `tipo = "DOCUMENTO"` igual que los artículos.
 
@@ -494,8 +500,8 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 
 Pendiente menor: `usuarios/usuarios.service.spec.ts` (CRUD de perfil — no bloqueante para demo). Frontend sin tests (no bloqueante).
 
-### Fase 5 — Hardening + Deploy DEMO ⬜
-- [ ] Rate limiting + logging estructurado
+### Fase 5 — Hardening + Deploy DEMO 🔄
+- [x] **Rate limiting + logging estructurado** — `@nestjs/throttler` con guard global (100 req/60s) y perfil estricto `auth` (5 req/60s) en `/auth/login`, `/auth/register`, `/auth/refresh`; `nestjs-pino` reemplaza el Logger nativo (pino-pretty en dev, JSON en prod); `bufferLogs: true` para capturar logs de arranque
 - [ ] Tests E2E básicos (los unitarios ya están completos — 107 tests)
 - [ ] Deploy: Supabase + Render + Vercel
 - [ ] Demo lista para presentar en Workana
