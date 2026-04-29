@@ -225,7 +225,7 @@ export class CoachesService {
     const quemadas = actividadHoy.reduce((acc, a) => acc + a.calorias, 0);
 
     // Excluir passwordHash del objeto de usuario devuelto al frontend
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     const { passwordHash: _pw, ...usuarioSinHash } = paciente;
 
     return {

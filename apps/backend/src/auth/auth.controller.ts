@@ -1,4 +1,5 @@
 import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import {
   ApiTags,
   ApiOperation,
@@ -35,6 +36,8 @@ export class AuthController {
    * @param dto - Datos de registro (email, nombre, apellido, password)
    * @returns Access token y refresh token
    */
+  /** Límite estricto: 5 intentos por IP en 60 segundos para evitar registro masivo */
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Registrar nueva cuenta" })
   @ApiResponse({ status: 201, description: "Cuenta creada, tokens devueltos" })
   @ApiResponse({ status: 409, description: "El email ya está registrado" })
@@ -52,6 +55,8 @@ export class AuthController {
    * @param usuario - El usuario verificado por LocalAuthGuard (viene de request.user)
    * @returns Access token y refresh token
    */
+  /** Límite estricto: 5 intentos por IP en 60 segundos — protección contra brute-force */
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Iniciar sesión" })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: "Login exitoso, tokens devueltos" })
@@ -70,6 +75,8 @@ export class AuthController {
    * @param dto - El refresh token actual
    * @returns Nuevos access token y refresh token
    */
+  /** Límite estricto: 5 intentos por IP en 60 segundos — previene enumeración de tokens */
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: "Refrescar access token" })
   @ApiResponse({ status: 200, description: "Tokens renovados" })
   @ApiResponse({ status: 401, description: "Refresh token inválido o expirado" })
