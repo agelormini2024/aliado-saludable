@@ -464,12 +464,14 @@ function ArticuloCard({
   onClick,
   onEditar,
   onEliminar,
+  onTogglePublicado,
 }: {
   articulo: Articulo;
   esAdmin: boolean;
   onClick: () => void;
   onEditar: () => void;
   onEliminar: () => void;
+  onTogglePublicado: () => void;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -539,6 +541,16 @@ function ArticuloCard({
           ) : (
             <>
               <button
+                onClick={onTogglePublicado}
+                className={`rounded-full px-3 py-1 font-sans text-xs font-medium transition-colors ${
+                  articulo.publicado
+                    ? "bg-forest-pale text-forest hover:bg-forest-pale/70"
+                    : "bg-cream-dark text-ink-muted hover:bg-cream-dark/70"
+                }`}
+              >
+                {articulo.publicado ? "Publicado" : "Borrador"}
+              </button>
+              <button
                 onClick={onEditar}
                 className="rounded-full border border-cream-dark px-3 py-1 font-sans text-xs text-ink-muted transition-colors hover:border-forest/40 hover:text-forest"
               >
@@ -576,6 +588,12 @@ function TabArticulos({
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => api.delete(`/contenido/articulos/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["articulos"] }),
+  });
+
+  const togglePublicadoMutation = useMutation({
+    mutationFn: async ({ id, publicado }: { id: string; publicado: boolean }) =>
+      api.patch(`/contenido/articulos/${id}`, { publicado }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["articulos"] }),
   });
 
@@ -634,6 +652,9 @@ function TabArticulos({
               onClick={() => router.push(`/contenido/${art.id}`)}
               onEditar={() => onEditar(art)}
               onEliminar={() => deleteMutation.mutate(art.id)}
+              onTogglePublicado={() =>
+                togglePublicadoMutation.mutate({ id: art.id, publicado: !art.publicado })
+              }
             />
           ))}
         </div>
