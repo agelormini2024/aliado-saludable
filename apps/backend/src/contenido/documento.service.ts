@@ -1,8 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common";
-import * as fs from "fs";
-import * as path from "path";
 import { PrismaService } from "../database/prisma.service";
 import { RagService } from "../ai/rag.service";
+import { StorageService } from "../common/storage/storage.service";
 import { UpdateDocumentoDto } from "./dto/update-documento.dto";
 import { Documento } from "@prisma/client";
 
@@ -36,11 +35,16 @@ export interface DocumentosResult {
  * DocumentoService — lógica para cargar y gestionar documentos (PDF/.docx).
  *
  * El flujo de carga es:
- * 1. Multer recibe el archivo y lo guarda en disco (uploads/documentos/)
- * 2. DocumentoService extrae el texto plano del archivo
- * 3. Se guarda en DB el nombre, mimeType, ruta en disco y el texto extraído
+ * 1. Multer recibe el archivo y lo mantiene en memoria (memoryStorage)
+ * 2. DocumentoService extrae el texto plano del buffer
+ * 3. StorageService sube el archivo a Supabase Storage (bucket "documentos")
+ * 4. Se guarda en BD el nombre, mimeType, ruta en Storage y el texto extraído
  *
- * El texto extraído (`contenido`) es lo que se indexa en EmbeddingDocument (Fase 3)
+ * Por qué Supabase Storage en lugar de disco local (D10 revisado para Fase 5):
+ * El filesystem de Render es efímero — se resetea en cada deploy. Supabase Storage
+ * persiste los archivos y los sirve correctamente en producción.
+ *
+ * El texto extraído (`contenido`) es lo que se indexa en EmbeddingDocument
  * para que el chat IA pueda responder preguntas basadas en el contenido del documento.
  */
 @Injectable()
@@ -50,6 +54,7 @@ export class DocumentoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ragService: RagService,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -81,10 +86,12 @@ export class DocumentoService {
   /**
    * Procesa un archivo recién subido por Multer y lo persiste en la BD.
    *
+   * Flujo: extraer texto → subir a Supabase Storage → guardar en BD → indexar en RAG.
+   *
    * @param autorId - ID del admin que sube el archivo (del JWT)
-   * @param archivo - Objeto de archivo de Multer (con path, originalname, mimetype, buffer)
+   * @param archivo - Objeto de archivo de Multer (memoryStorage: el buffer ya está en memoria)
    * @returns El documento creado
-   * @throws BadRequestException si el tipo MIME no es PDF ni DOCX
+   * @throws BadRequestException si el tipo MIME no es PDF ni DOCX, o si el documento está vacío
    */
   async crearDocumento(
     autorId: string,
@@ -98,19 +105,16 @@ export class DocumentoService {
       );
     }
 
-    // Guardar el archivo en disco (Multer memoryStorage → escribir manualmente)
-    const nombreArchivo = `${Date.now()}-${archivo.originalname.replace(/\s+/g, "_")}`;
-    const rutaRelativa = path.join("uploads", "documentos", nombreArchivo);
-    const rutaAbsoluta = path.join(process.cwd(), rutaRelativa);
-
-    fs.writeFileSync(rutaAbsoluta, archivo.buffer);
+    // Nombre único dentro del bucket — timestamp + nombre original sin espacios
+    const storagePath = `${Date.now()}-${archivo.originalname.replace(/\s+/g, "_")}`;
+    await this.storageService.upload(storagePath, archivo.buffer, archivo.mimetype);
 
     const documento = await this.prisma.documento.create({
       data: {
         nombre: archivo.originalname,
         mimeType: archivo.mimetype,
         contenido,
-        archivoPath: rutaRelativa,
+        archivoPath: storagePath,
         publicado: false,
         autorId,
       },
@@ -214,33 +218,34 @@ export class DocumentoService {
   }
 
   /**
-   * Elimina un documento de la BD y su archivo del disco.
+   * Elimina un documento de la BD, sus embeddings de RAG y su archivo de Supabase Storage.
    *
    * @param id - ID del documento a eliminar
    */
   async eliminarDocumento(id: string): Promise<Documento> {
     const doc = await this.obtenerDocumento(id, false);
 
-    // Eliminar embeddings antes de borrar el documento
+    // Eliminar embeddings antes de borrar el documento en BD
     await this.ragService.eliminarPorReferencia(id);
 
-    // Eliminar el archivo físico si existe
-    const rutaAbsoluta = path.join(process.cwd(), doc.archivoPath);
-    if (fs.existsSync(rutaAbsoluta)) {
-      fs.unlinkSync(rutaAbsoluta);
-    }
+    // Eliminar el archivo de Supabase Storage (si falla, solo se loguea un warning)
+    await this.storageService.delete(doc.archivoPath);
 
     return this.prisma.documento.delete({ where: { id } });
   }
 
   /**
-   * Devuelve la ruta absoluta del archivo en disco para servirlo como descarga.
+   * Descarga el archivo de Supabase Storage y lo devuelve como Buffer.
+   *
+   * El controller usa este buffer para enviarlo directamente al cliente,
+   * sin exponer URLs de Supabase ni requerir acceso directo al bucket.
    *
    * @param id - ID del documento
    * @param soloPublicado - Si true, solo los publicados son descargables por usuarios
    */
-  async obtenerRutaArchivo(id: string, soloPublicado = true): Promise<string> {
+  async obtenerBufferArchivo(id: string, soloPublicado = true): Promise<{ buffer: Buffer; doc: Documento }> {
     const doc = await this.obtenerDocumento(id, soloPublicado);
-    return path.join(process.cwd(), doc.archivoPath);
+    const buffer = await this.storageService.download(doc.archivoPath);
+    return { buffer, doc };
   }
 }

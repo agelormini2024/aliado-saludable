@@ -6,6 +6,7 @@ import { ContenidoService } from "./contenido.service";
 import { DocumentoController } from "./documento.controller";
 import { DocumentoService } from "./documento.service";
 import { AiModule } from "../ai/ai.module";
+import { StorageModule } from "../common/storage/storage.module";
 
 /**
  * ContenidoModule — módulo de artículos y documentos informativos.
@@ -25,6 +26,7 @@ import { AiModule } from "../ai/ai.module";
   imports: [
     MulterModule.register({ storage: memoryStorage() }),
     AiModule,
+    StorageModule,
   ],
   controllers: [ContenidoController, DocumentoController],
   providers: [ContenidoService, DocumentoService],

@@ -153,7 +153,10 @@ export class DocumentoController {
 
   /**
    * Sirve el archivo original para descarga directa.
-   * Usa el nombre original del archivo como Content-Disposition.
+   *
+   * Descarga el archivo de Supabase Storage server-side y lo envía al cliente como buffer.
+   * Así el JWT guard sigue siendo el único control de acceso — el cliente nunca
+   * interactúa directamente con Supabase Storage ni ve URLs internas del bucket.
    */
   @ApiOperation({ summary: "Descargar archivo original del documento" })
   @ApiParam({ name: "id", description: "ID del documento" })
@@ -165,12 +168,11 @@ export class DocumentoController {
     @Res() res: Response,
   ): Promise<void> {
     const esAdmin = usuario.rol === RolUsuario.ADMIN;
-    const rutaAbsoluta = await this.documentoService.obtenerRutaArchivo(id, !esAdmin);
-    const doc = await this.documentoService.obtenerDocumento(id, !esAdmin);
+    const { buffer, doc } = await this.documentoService.obtenerBufferArchivo(id, !esAdmin);
 
     res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(doc.nombre)}"`);
     res.setHeader("Content-Type", doc.mimeType);
-    res.sendFile(rutaAbsoluta);
+    res.send(buffer);
   }
 
   // ─── ESCRITURA (solo ADMIN) ───────────────────────────────────────────────────

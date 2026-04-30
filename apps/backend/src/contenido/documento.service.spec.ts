@@ -1,27 +1,18 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { NotFoundException, BadRequestException } from "@nestjs/common";
-import * as fs from "fs";
 import { DocumentoService } from "./documento.service";
 import { PrismaService } from "../database/prisma.service";
 import { RagService } from "../ai/rag.service";
+import { StorageService } from "../common/storage/storage.service";
 import { Documento } from "@prisma/client";
 
 /**
- * Mockear fs, pdf-parse y mammoth antes de que el módulo los requiera.
+ * Mockear pdf-parse y mammoth antes de que el módulo los requiera.
  *
  * DocumentoService los carga con require() a nivel de módulo, y Jest intercepta
  * el registry de módulos antes de cualquier import/require cuando se usa jest.mock().
  * Las llamadas a jest.mock() se "hoistean" automáticamente al inicio del archivo.
- *
- * fs se mockea con jest.mock() porque sus exports nativos son non-configurable
- * y jest.spyOn() lanza "Cannot redefine property" al intentar redefinirlos.
  */
-jest.mock("fs", () => ({
-  ...jest.requireActual<typeof import("fs")>("fs"),
-  writeFileSync: jest.fn(),
-  existsSync: jest.fn().mockReturnValue(false),
-  unlinkSync: jest.fn(),
-}));
 jest.mock("pdf-parse", () =>
   jest.fn().mockResolvedValue({ text: "Texto extraído del PDF de prueba" }),
 );
@@ -57,13 +48,26 @@ const mockRagService = {
   eliminarPorReferencia: jest.fn().mockResolvedValue(undefined),
 };
 
+/**
+ * Mock de StorageService.
+ *
+ * Reemplaza a `fs` — en la nueva implementación todos los archivos
+ * van a Supabase Storage en lugar del disco local (ver D10 revisado en Fase 5).
+ * upload() devuelve la misma ruta que recibe; delete() y download() son noop.
+ */
+const mockStorageService = {
+  upload: jest.fn().mockResolvedValue("1234567890-guia-nutricion.pdf"),
+  delete: jest.fn().mockResolvedValue(undefined),
+  download: jest.fn().mockResolvedValue(Buffer.from("contenido del archivo")),
+};
+
 /** Documento de prueba tal como lo devuelve Prisma */
 const documentoMock: Documento = {
   id: "doc-1",
   nombre: "guia-nutricion.pdf",
   mimeType: "application/pdf",
   contenido: "Texto extraído del PDF de prueba",
-  archivoPath: "uploads/documentos/1234567890-guia-nutricion.pdf",
+  archivoPath: "1234567890-guia-nutricion.pdf",
   publicado: false,
   autorId: "admin-1",
   createdAt: new Date("2026-04-01"),
@@ -96,6 +100,7 @@ describe("DocumentoService", () => {
         DocumentoService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: RagService, useValue: mockRagService },
+        { provide: StorageService, useValue: mockStorageService },
       ],
     }).compile();
 
@@ -106,25 +111,20 @@ describe("DocumentoService", () => {
     mockPrismaService.$transaction.mockImplementation(
       (queries: Promise<unknown>[]) => Promise.all(queries),
     );
-
-    // Restablecer el comportamiento por defecto de fs tras clearAllMocks:
-    // clearAllMocks limpia las llamadas pero no restaura las implementaciones
-    // de los mocks globales — necesitamos reconfigurar existsSync como false
-    (fs.existsSync as jest.Mock).mockReturnValue(false);
   });
 
   // ─── crearDocumento() ───────────────────────────────────────────────────────
 
   describe("crearDocumento()", () => {
-    it("extrae el texto del PDF, escribe en disco y persiste en BD", async () => {
+    it("extrae el texto del PDF, lo sube a Storage y persiste en BD", async () => {
       mockPrismaService.documento.create.mockResolvedValue(documentoMock);
 
       const result = await service.crearDocumento("admin-1", archivoMulterMock);
 
       expect(result.id).toBe("doc-1");
       expect(result.nombre).toBe("guia-nutricion.pdf");
+      expect(mockStorageService.upload).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.documento.create).toHaveBeenCalledTimes(1);
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
     });
 
     it("crea el documento con publicado=false por defecto", async () => {
@@ -321,24 +321,13 @@ describe("DocumentoService", () => {
       expect(ragCallOrder).toBeLessThan(deleteCallOrder);
     });
 
-    it("elimina el archivo físico del disco cuando existe", async () => {
+    it("llama a storageService.delete con la ruta del archivo en el bucket", async () => {
       mockPrismaService.documento.findFirst.mockResolvedValue(documentoMock);
       mockPrismaService.documento.delete.mockResolvedValue(documentoMock);
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
 
       await service.eliminarDocumento("doc-1");
 
-      expect(fs.unlinkSync).toHaveBeenCalledTimes(1);
-    });
-
-    it("NO llama a unlinkSync si el archivo no existe en disco", async () => {
-      mockPrismaService.documento.findFirst.mockResolvedValue(documentoMock);
-      mockPrismaService.documento.delete.mockResolvedValue(documentoMock);
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
-
-      await service.eliminarDocumento("doc-1");
-
-      expect(fs.unlinkSync).not.toHaveBeenCalled();
+      expect(mockStorageService.delete).toHaveBeenCalledWith(documentoMock.archivoPath);
     });
 
     it("devuelve el documento eliminado", async () => {
@@ -348,6 +337,29 @@ describe("DocumentoService", () => {
       const result = await service.eliminarDocumento("doc-1");
 
       expect(result.id).toBe("doc-1");
+    });
+  });
+
+  // ─── obtenerBufferArchivo() ─────────────────────────────────────────────────
+
+  describe("obtenerBufferArchivo()", () => {
+    it("descarga el archivo de Storage y devuelve el buffer con el documento", async () => {
+      const docPublicado = { ...documentoMock, publicado: true };
+      mockPrismaService.documento.findFirst.mockResolvedValue(docPublicado);
+      const bufferEsperado = Buffer.from("contenido del archivo");
+      mockStorageService.download.mockResolvedValue(bufferEsperado);
+
+      const { buffer, doc } = await service.obtenerBufferArchivo("doc-1");
+
+      expect(buffer).toEqual(bufferEsperado);
+      expect(doc.id).toBe("doc-1");
+      expect(mockStorageService.download).toHaveBeenCalledWith(docPublicado.archivoPath);
+    });
+
+    it("lanza NotFoundException si el documento no existe o no está publicado", async () => {
+      mockPrismaService.documento.findFirst.mockResolvedValue(null);
+
+      await expect(service.obtenerBufferArchivo("inexistente")).rejects.toThrow(NotFoundException);
     });
   });
 });
