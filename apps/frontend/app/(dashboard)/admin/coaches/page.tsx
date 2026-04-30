@@ -548,6 +548,7 @@ export default function CoachesAdminPage() {
                 <input
                   {...register("email")}
                   type="email"
+                  autoComplete="off"
                   className={inputClass}
                   placeholder="coach@ejemplo.com"
                 />
@@ -556,6 +557,7 @@ export default function CoachesAdminPage() {
                 <input
                   {...register("password")}
                   type="password"
+                  autoComplete="new-password"
                   className={inputClass}
                   placeholder="Mínimo 8 caracteres"
                 />
